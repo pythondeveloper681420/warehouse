@@ -9,7 +9,9 @@ from pathlib import Path
 # Set locale for Brazilian Portuguese
 #locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 # Define o caminho base dinamicamente, com uma variável de ambiente.
-base_path = os.getenv('APP_BASE_PATH', os.path.expanduser('~'))
+#base_path = os.getenv('APP_BASE_PATH', os.path.expanduser('~'))
+base_path = os.getenv('APP_BASE_PATH') or os.path.expanduser('~')
+
 
 # Default folder paths
 DEFAULT_FOLDERS = [
