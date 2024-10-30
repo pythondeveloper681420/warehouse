@@ -1,12 +1,12 @@
 import pandas as pd
 import streamlit as st
-import locale
+#import locale
 import time
 from datetime import datetime
 import io
 
 # Set locale for Brazilian Portuguese
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+#locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 # Page configuration
 st.set_page_config(
