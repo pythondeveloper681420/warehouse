@@ -1,12 +1,12 @@
 import pandas as pd
 import streamlit as st
-#import locale
 import time
 from datetime import datetime
 import io
 
-# Set locale for Brazilian Portuguese
-#locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+# Constants
+MAX_UPLOAD_SIZE_MB = 200  # Maximum upload size in MB
+BYTES_PER_MB = 1024 * 1024
 
 # Page configuration
 st.set_page_config(
@@ -34,13 +34,37 @@ st.markdown("""
         .download-button {
             margin-top: 1rem;
         }
+        .upload-status {
+            margin-top: 0.5rem;
+            font-size: 0.9em;
+            color: #666;
+        }
+        iframe {
+            display: none;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 def format_currency(value):
-    """Format value as Brazilian currency"""
+    """Format value as Brazilian currency without using locale"""
     try:
-        return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        if pd.isna(value) or value == '':
+            return "R$ 0,00"
+        
+        # Convert to float if string
+        if isinstance(value, str):
+            value = float(value.replace('.', '').replace(',', '.'))
+            
+        # Format the number
+        value = float(value)
+        integer_part = int(value)
+        decimal_part = int((value - integer_part) * 100)
+        
+        # Convert to Brazilian format
+        formatted_integer = '{:,}'.format(integer_part).replace(',', '.')
+        formatted_value = f"R$ {formatted_integer},{decimal_part:02d}"
+        
+        return formatted_value
     except:
         return "R$ 0,00"
 
@@ -70,17 +94,11 @@ def process_dataframe(df):
     
     # Concatenate columns and create a new column
     df_processed['concatenada'] = df_processed['Purchasing Document'].astype(str) + df_processed['Item'].astype(str)
-    # Remove duplicates based on the concatenated column
-    df_processed = df_processed.drop_duplicates(subset=['concatenada']) 
-    # Keep only numeric values
+    df_processed = df_processed.drop_duplicates(subset=['concatenada'])
     df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
-
-    # Remove NaN (non-numeric) values
     df_processed = df_processed.dropna(subset=['Purchasing Document'])
-
-    # Convert the column to integer, if necessary
     df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
-    df_processed = df_processed.sort_values(by='Purchasing Document', ascending=False) 
+    df_processed = df_processed.sort_values(by='Purchasing Document', ascending=False)
     
     # Format currency columns
     currency_columns = [
@@ -114,23 +132,45 @@ def to_excel(df):
     output.seek(0)
     return output
 
+def calculate_total_size(files):
+    """Calculate total size of uploaded files in MB"""
+    return sum(file.size for file in files) / BYTES_PER_MB
+
 def main():
     st.title("📊 Processamento de Pedidos de Compra")
     
-    # Initialize session state for processed data and download filename
+    # Initialize session state
     if 'processed_data' not in st.session_state:
         st.session_state.processed_data = None
     if 'download_filename' not in st.session_state:
         st.session_state.download_filename = None
+    if 'total_size' not in st.session_state:
+        st.session_state.total_size = 0
     
-    # File upload section
+    # File upload section with size tracking
     st.subheader("Seleção de Arquivos")
-    uploaded_files = st.file_uploader(
-        "Selecione os arquivos Excel para processar",
-        type=['xlsx'],
-        accept_multiple_files=True,
-        help="Você pode selecionar múltiplos arquivos Excel (.xlsx)"
-    )
+    
+    # Create two columns for the upload area
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        uploaded_files = st.file_uploader(
+            "Selecione os arquivos Excel para processar",
+            type=['xlsx'],
+            accept_multiple_files=True,
+            help="Você pode selecionar múltiplos arquivos Excel (.xlsx)"
+        )
+    
+    with col2:
+        if uploaded_files:
+            total_size = calculate_total_size(uploaded_files)
+            st.session_state.total_size = total_size
+            remaining_size = MAX_UPLOAD_SIZE_MB - total_size
+            
+            st.info(f"""
+            📦 Espaço utilizado: {total_size:.1f}MB
+            ⚡ Espaço disponível: {remaining_size:.1f}MB
+            """)
     
     # Main process button
     if st.button("🚀 Iniciar Processamento", type="primary", disabled=not uploaded_files):
@@ -144,7 +184,6 @@ def main():
                 total_files = len(uploaded_files)
                 processed_files = 0
                 
-                # Process each uploaded file
                 for uploaded_file in uploaded_files:
                     try:
                         status_container.info(f"Processando: {uploaded_file.name}")
@@ -152,26 +191,20 @@ def main():
                         if not df_temp.empty:
                             all_dfs.append(df_temp)
                     except Exception as e:
-                        alert = st.error(f"Erro ao processar {uploaded_file.name}: {str(e)}")
+                        st.error(f"Erro ao processar {uploaded_file.name}: {str(e)}")
                         time.sleep(1)
-                        alert.empty()
                     
                     processed_files += 1
                     progress_bar.progress(processed_files / total_files)
                 
                 if all_dfs:
-                    # Process data
                     df_final = pd.concat(all_dfs, ignore_index=True)
                     df_processed = process_dataframe(df_final)
-                    
-                    # Store processed data in session state
                     st.session_state.processed_data = df_processed
                     
-                    # Generate download filename
                     timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
                     st.session_state.download_filename = f'master_store_{timestamp}.xlsx'
                     
-                    # Show success message
                     elapsed_time = time.time() - start_time
                     st.success(f"""
                     ✅ Processamento concluído com sucesso!
@@ -179,33 +212,31 @@ def main():
                     **Detalhes:**
                     - Tempo total: {elapsed_time:.2f} segundos
                     - Arquivos processados: {processed_files}
-                    
-                    Use o botão de download abaixo para baixar o arquivo processado.
                     """)
-                    
                 else:
-                    alert = st.warning("⚠️ Nenhum dado encontrado para processar!")
-                    time.sleep(1)
-                    alert.empty()
+                    st.warning("⚠️ Nenhum dado encontrado para processar!")
         
         except Exception as e:
             st.error(f"❌ Erro durante o processamento: {str(e)}")
     
-    # Download section - only show if there's processed data
+    # Download section with no-reload functionality
     if st.session_state.processed_data is not None:
         st.subheader("Download do Arquivo Processado")
         
-        # Create Excel file in memory
         excel_data = to_excel(st.session_state.processed_data)
         
-        # Download button
-        st.download_button(
-            label="📥 Baixar Arquivo Excel",
-            data=excel_data,
-            file_name=st.session_state.download_filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="Clique para baixar o arquivo Excel processado"
-        )
+        # Create a container for the download button
+        download_container = st.container()
+        
+        with download_container:
+            st.download_button(
+                label="📥 Baixar Arquivo Excel",
+                data=excel_data,
+                file_name=st.session_state.download_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help="Clique para baixar o arquivo Excel processado",
+                use_container_width=True,
+            )
 
 if __name__ == "__main__":
     main()
