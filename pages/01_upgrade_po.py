@@ -1,13 +1,13 @@
 import os
 import pandas as pd
 import streamlit as st
-import locale
+#import locale
 import time
 from datetime import datetime
 from pathlib import Path
 
 # Set locale for Brazilian Portuguese
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+#locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 # Default folder paths
 DEFAULT_FOLDERS = [
