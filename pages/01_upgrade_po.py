@@ -7,6 +7,7 @@ import gc
 import logging
 from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
+import base64
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -152,13 +153,14 @@ class FileHandler:
         return sum(file.size for file in files) / BYTES_PER_MB
 
     @staticmethod
-    def to_excel(df: pd.DataFrame) -> io.BytesIO:
-        """Convert DataFrame to Excel file in memory"""
+    def to_excel(df: pd.DataFrame) -> str:
+        """Convert DataFrame to Excel file and return as base64 string"""
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df.to_excel(writer, index=False)
-        output.seek(0)
-        return output
+        excel_data = output.getvalue()
+        b64 = base64.b64encode(excel_data).decode()
+        return b64
 
     @staticmethod
     def read_excel_file(file: Any) -> Optional[pd.DataFrame]:
@@ -169,6 +171,11 @@ class FileHandler:
             logger.error(f"Error reading file {file.name}: {str(e)}")
             return None
 
+def get_download_link(b64_data: str, filename: str) -> str:
+    """Generate HTML download link for Excel file"""
+    href = f'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_data}'
+    return f'<a href="{href}" download="{filename}" class="downloadButton">📥 Baixar Arquivo Excel Processado</a>'
+
 def main():
     """Main application function"""
     st.set_page_config(
@@ -178,10 +185,36 @@ def main():
         initial_sidebar_state="expanded"
     )
     
+    # Add custom CSS for download button
+    st.markdown("""
+        <style>
+        .downloadButton {
+            background-color: #FF4B4B;
+            color: white;
+            padding: 0.5em 1em;
+            text-decoration: none;
+            border-radius: 5px;
+            border: none;
+            display: inline-block;
+            width: 100%;
+            text-align: center;
+            margin: 1em 0;
+            font-weight: 500;
+        }
+        .downloadButton:hover {
+            background-color: #FF0000;
+            color: white;
+            text-decoration: none;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     if 'processed_data' not in st.session_state:
         st.session_state.processed_data = None
     if 'download_filename' not in st.session_state:
         st.session_state.download_filename = None
+    if 'excel_data' not in st.session_state:
+        st.session_state.excel_data = None
     
     st.title("📊 Sistema de Processamento de Pedidos de Compra")
     
@@ -238,6 +271,9 @@ def main():
                         timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
                         st.session_state.download_filename = f'processamento_po_{timestamp}.xlsx'
                         
+                        # Convert to base64 and store in session state
+                        st.session_state.excel_data = FileHandler.to_excel(df_processed)
+                        
                         elapsed_time = time.time() - start_time
                         
                         st.success("✅ Processamento concluído com sucesso!")
@@ -255,19 +291,13 @@ def main():
                 logger.error(f"Error during processing: {str(e)}")
                 st.error(f"❌ Erro durante o processamento: {str(e)}")
     
-    if st.session_state.processed_data is not None:
+    if st.session_state.excel_data is not None:
         st.subheader("📥 Download do Arquivo Processado")
-        
-        excel_data = FileHandler.to_excel(st.session_state.processed_data)
-        
-        st.download_button(
-            label="📥 Baixar Arquivo Excel Processado",
-            data=excel_data,
-            file_name=st.session_state.download_filename,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="Clique para baixar o arquivo Excel processado",
-            use_container_width=True
+        download_link = get_download_link(
+            st.session_state.excel_data,
+            st.session_state.download_filename
         )
+        st.markdown(download_link, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     try:
