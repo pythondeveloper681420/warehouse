@@ -4,15 +4,12 @@ import os
 import xml.etree.ElementTree as ET
 from datetime import date
 import re
-import locale
 from unidecode import unidecode
 import time
 import pickle
 import numpy as np
 
-# Definindo a localidade para o Brasil
-import locale
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+
 
 #################################################################################################################
 
