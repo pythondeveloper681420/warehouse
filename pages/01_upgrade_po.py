@@ -8,6 +8,8 @@ from pathlib import Path
 
 # Set locale for Brazilian Portuguese
 #locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+# Define o caminho base dinamicamente, com uma variável de ambiente.
+base_path = os.getenv('APP_BASE_PATH', os.path.expanduser('~'))
 
 # Default folder paths
 DEFAULT_FOLDERS = [
@@ -22,14 +24,18 @@ DEFAULT_FOLDERS = [
         'filter_date': datetime.today()
     },
     {
-        'path': os.path.join(os.path.expanduser('~'), 'Documents\po_files'),
+        #'path': os.path.join(os.path.expanduser('~'), 'Documents\po_files'),
+        'path':os.path.join(base_path, 'Documents', 'po_files'),
         'use_date_filter': False,
         'filter_date': datetime.today()
     }
 ]
 
 # Default output folder (now using the third default folder)
-DEFAULT_OUTPUT_FOLDER = os.path.join(os.path.expanduser('~'), 'Documents\po_files')
+
+# Define o diretório de saída padrão, que é construído dinamicamente.
+DEFAULT_OUTPUT_FOLDER = os.path.join(base_path, 'Documents', 'po_files')
+#DEFAULT_OUTPUT_FOLDER = os.path.join(os.path.expanduser('~'), 'Documents\po_files')
 
 # Page configuration
 st.set_page_config(
