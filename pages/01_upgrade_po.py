@@ -17,76 +17,6 @@ MAX_UPLOAD_SIZE_MB = 200
 BYTES_PER_MB = 1024 * 1024
 CHUNK_SIZE = 10000  # Number of rows to process at once
 
-# Page configuration and styling
-def setup_page():
-    """Configure page settings and styling"""
-    st.set_page_config(
-        page_title="Sistema de Processamento de PO",
-        page_icon="📊",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    st.markdown("""
-        <style>
-            .stButton button {
-                width: 100%;
-                height: 3em;
-                background-color: #4CAF50;
-                color: white;
-            }
-            .stButton button:hover {
-                background-color: #45a049;
-            }
-            .block-container {
-                padding-top: 2rem;
-            }
-            .file-uploader {
-                background-color: #f8f9fa;
-                padding: 2rem;
-                border-radius: 0.5rem;
-                border: 2px dashed #dee2e6;
-            }
-            .status-box {
-                padding: 1rem;
-                border-radius: 0.5rem;
-                margin: 1rem 0;
-            }
-            .success-box {
-                background-color: #d4edda;
-                border: 1px solid #c3e6cb;
-                color: #155724;
-            }
-            .warning-box {
-                background-color: #fff3cd;
-                border: 1px solid #ffeeba;
-                color: #856404;
-            }
-            .error-box {
-                background-color: #f8d7da;
-                border: 1px solid #f5c6cb;
-                color: #721c24;
-            }
-            .metrics-container {
-                background-color: #f8f9fa;
-                padding: 1rem;
-                border-radius: 0.5rem;
-                margin: 1rem 0;
-            }
-            .header-style {
-                font-size: 2.5rem;
-                font-weight: bold;
-                color: #1a237e;
-                margin-bottom: 2rem;
-            }
-            .subheader-style {
-                font-size: 1.5rem;
-                color: #283593;
-                margin: 1.5rem 0;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
 class DataProcessor:
     """Class to handle all data processing operations"""
     
@@ -122,17 +52,14 @@ class DataProcessor:
     def process_chunk(df: pd.DataFrame) -> pd.DataFrame:
         """Process a chunk of data"""
         try:
-            # Create a copy to avoid chained assignment warnings
             chunk_processed = df.copy()
             
-            # Convert numeric columns
             numeric_columns = ['Net order value', 'Order Quantity', 'PBXX Condition Amount']
             for col in numeric_columns:
                 if col in chunk_processed.columns:
                     chunk_processed[col] = pd.to_numeric(chunk_processed[col], errors='coerce')
                     chunk_processed[col] = chunk_processed[col].fillna(0)
             
-            # Calculate values using vectorized operations
             chunk_processed['valor_unitario'] = chunk_processed.apply(
                 lambda row: DataProcessor.safe_division(row['Net order value'], row['Order Quantity']),
                 axis=1
@@ -152,7 +79,6 @@ class DataProcessor:
     def process_dataframe(df: pd.DataFrame, progress_bar: Any) -> pd.DataFrame:
         """Process the complete DataFrame with progress tracking"""
         try:
-            # Process in chunks
             chunk_size = CHUNK_SIZE
             num_chunks = len(df) // chunk_size + 1
             processed_chunks = []
@@ -162,37 +88,30 @@ class DataProcessor:
                 end_idx = min((i + 1) * chunk_size, len(df))
                 chunk = df.iloc[start_idx:end_idx]
                 
-                # Process chunk
                 processed_chunk = DataProcessor.process_chunk(chunk)
                 processed_chunks.append(processed_chunk)
                 
-                # Update progress
                 progress = (i + 1) / num_chunks
                 progress_bar.progress(progress)
                 
-            # Combine processed chunks
             df_processed = pd.concat(processed_chunks, ignore_index=True)
             
-            # Calculate PO totals
             groupby_cols = ['Purchasing Document']
             df_processed['total_valor_po_liquido'] = df_processed.groupby(groupby_cols)['Net order value'].transform('sum')
             df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
             df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Item'].transform('count')
             
-            # Handle concatenation and duplicates
             df_processed['concatenada'] = (
                 df_processed['Purchasing Document'].astype(str) + 
                 df_processed['Item'].astype(str)
             )
             df_processed = df_processed.drop_duplicates(subset=['concatenada'])
             
-            # Process Purchasing Document
             df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
             df_processed = df_processed.dropna(subset=['Purchasing Document'])
             df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
             df_processed = df_processed.sort_values(by='Purchasing Document', ascending=False)
             
-            # Format currency columns
             currency_columns = [
                 'valor_unitario', 'valor_item_com_impostos', 'Net order value',
                 'total_valor_po_liquido', 'total_valor_po_com_impostos'
@@ -201,7 +120,6 @@ class DataProcessor:
             for col in currency_columns:
                 df_processed[f'{col}_formatted'] = df_processed[col].apply(DataProcessor.format_currency)
             
-            # Process dates
             date_columns = [
                 'Document Date', 'Delivery date', 'Last FUP', 
                 'Stat.-Rel. Del. Date', 'Delivery Date', 
@@ -253,19 +171,21 @@ class FileHandler:
 
 def main():
     """Main application function"""
-    setup_page()
+    st.set_page_config(
+        page_title="Sistema de Processamento de PO",
+        page_icon="📊",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
     
-    # Initialize session state
     if 'processed_data' not in st.session_state:
         st.session_state.processed_data = None
     if 'download_filename' not in st.session_state:
         st.session_state.download_filename = None
     
-    # Header
-    st.markdown('<h1 class="header-style">📊 Sistema de Processamento de Pedidos de Compra</h1>', unsafe_allow_html=True)
+    st.title("📊 Sistema de Processamento de Pedidos de Compra")
     
-    # File upload section
-    st.markdown('<h2 class="subheader-style">📁 Seleção de Arquivos</h2>', unsafe_allow_html=True)
+    st.subheader("📁 Seleção de Arquivos")
     
     col1, col2 = st.columns([3, 1])
     
@@ -282,78 +202,61 @@ def main():
             total_size = FileHandler.calculate_total_size(uploaded_files)
             remaining_size = MAX_UPLOAD_SIZE_MB - total_size
             
-            st.markdown(
-                f"""
-                <div class="metrics-container">
-                    <p>📦 Espaço utilizado: {total_size:.1f}MB</p>
-                    <p>⚡ Espaço disponível: {remaining_size:.1f}MB</p>
-                </div>
-                """,
-                unsafe_allow_html=True
+            st.metric(
+                label="📦 Espaço utilizado",
+                value=f"{total_size:.1f}MB"
+            )
+            st.metric(
+                label="⚡ Espaço disponível",
+                value=f"{remaining_size:.1f}MB"
             )
     
-    # Process button
-    if st.button("🚀 Iniciar Processamento", type="primary", disabled=not uploaded_files):
-        try:
-            with st.spinner("Processando arquivos..."):
-                progress_bar = st.progress(0)
-                status_container = st.empty()
-                
-                start_time = time.time()
-                all_dfs = []
-                
-                # Process each file
-                for idx, uploaded_file in enumerate(uploaded_files):
-                    status_container.info(f"Processando: {uploaded_file.name}")
-                    df_temp = FileHandler.read_excel_file(uploaded_file)
+    if uploaded_files:
+        if st.button("🚀 Iniciar Processamento", use_container_width=True):
+            try:
+                with st.spinner("Processando arquivos..."):
+                    progress_bar = st.progress(0)
+                    status_placeholder = st.empty()
                     
-                    if df_temp is not None and not df_temp.empty:
-                        all_dfs.append(df_temp)
+                    start_time = time.time()
+                    all_dfs = []
                     
-                    progress_bar.progress((idx + 1) / len(uploaded_files))
-                
-                # Combine and process all data
-                if all_dfs:
-                    df_final = pd.concat(all_dfs, ignore_index=True)
-                    df_processed = DataProcessor.process_dataframe(df_final, progress_bar)
+                    for idx, uploaded_file in enumerate(uploaded_files):
+                        status_placeholder.info(f"Processando: {uploaded_file.name}")
+                        df_temp = FileHandler.read_excel_file(uploaded_file)
+                        
+                        if df_temp is not None and not df_temp.empty:
+                            all_dfs.append(df_temp)
+                        
+                        progress_bar.progress((idx + 1) / len(uploaded_files))
                     
-                    # Store processed data
-                    st.session_state.processed_data = df_processed
-                    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-                    st.session_state.download_filename = f'processamento_po_{timestamp}.xlsx'
+                    if all_dfs:
+                        df_final = pd.concat(all_dfs, ignore_index=True)
+                        df_processed = DataProcessor.process_dataframe(df_final, progress_bar)
+                        
+                        st.session_state.processed_data = df_processed
+                        timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
+                        st.session_state.download_filename = f'processamento_po_{timestamp}.xlsx'
+                        
+                        elapsed_time = time.time() - start_time
+                        
+                        st.success("✅ Processamento concluído com sucesso!")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Tempo de processamento", f"{elapsed_time:.2f}s")
+                        col2.metric("Arquivos processados", len(uploaded_files))
+                        col3.metric("Registros processados", len(df_processed))
+                    else:
+                        st.warning("⚠️ Nenhum dado encontrado para processar!")
                     
-                    # Show success message
-                    elapsed_time = time.time() - start_time
-                    st.markdown(
-                        f"""
-                        <div class="status-box success-box">
-                            <h3>✅ Processamento concluído com sucesso!</h3>
-                            <p>Tempo total: {elapsed_time:.2f} segundos</p>
-                            <p>Arquivos processados: {len(uploaded_files)}</p>
-                            <p>Registros processados: {len(df_processed)}</p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown(
-                        '<div class="status-box warning-box">⚠️ Nenhum dado encontrado para processar!</div>',
-                        unsafe_allow_html=True
-                    )
-                
-                # Clear memory
-                gc.collect()
-        
-        except Exception as e:
-            logger.error(f"Error during processing: {str(e)}")
-            st.markdown(
-                f'<div class="status-box error-box">❌ Erro durante o processamento: {str(e)}</div>',
-                unsafe_allow_html=True
-            )
+                    gc.collect()
+            
+            except Exception as e:
+                logger.error(f"Error during processing: {str(e)}")
+                st.error(f"❌ Erro durante o processamento: {str(e)}")
     
-    # Download section
     if st.session_state.processed_data is not None:
-        st.markdown('<h2 class="subheader-style">📥 Download do Arquivo Processado</h2>', unsafe_allow_html=True)
+        st.subheader("📥 Download do Arquivo Processado")
         
         excel_data = FileHandler.to_excel(st.session_state.processed_data)
         
@@ -363,7 +266,7 @@ def main():
             file_name=st.session_state.download_filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             help="Clique para baixar o arquivo Excel processado",
-            use_container_width=True,
+            use_container_width=True
         )
 
 if __name__ == "__main__":
