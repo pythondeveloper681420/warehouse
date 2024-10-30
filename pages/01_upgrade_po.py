@@ -149,14 +149,14 @@ def main():
     valid_folders = [f for f in st.session_state.folders if os.path.exists(f['path'])]
     invalid_folders = [f for f in st.session_state.folders if not os.path.exists(f['path'])]
     
-    # if invalid_folders:
-    #     alert = st.warning("⚠️ As seguintes pastas não foram encontradas:")
-    #     time.sleep(1)
-    #     alert.empty()
-    #     for folder in invalid_folders:
-    #         alert = st.warning(f"- {folder['path']}")
-    #         time.sleep(1)
-    #         alert.empty()
+    if invalid_folders:
+        alert = st.warning("⚠️ As seguintes pastas não foram encontradas:")
+        time.sleep(1)
+        alert.empty()
+        for folder in invalid_folders:
+            alert = st.warning(f"- {folder['path']}")
+            time.sleep(1)
+            alert.empty()
     
     # Main process button
     if st.button("🚀 Iniciar Processamento", type="primary", disabled=len(valid_folders) == 0):
