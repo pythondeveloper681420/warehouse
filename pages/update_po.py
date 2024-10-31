@@ -21,14 +21,28 @@ CHUNK_SIZE = 10000  # Number of rows to process at once
 # Colunas selecionadas para salvar no arquivo final
 SELECTED_COLUMNS = [
     'Purchasing Document', 
-    'Item', 
+    'Item',
+    'Supplier',
+    'Vendor Name',
+    'Material',
+    'Material Description',
+    'Order Quantity',
+    'Order Unit',
+    'Control Code (NCM)',
+    'Project Code',
+    'Andritz WBS Element',
+    'Cost Center',
     'Document Date', 
     'PO Creation Date',
+    'PO Created by',
+    'Purchase Requisition',
+    'total_itens_po',
     'valor_unitario_formatted', 
     'total_valor_po_liquido_formatted', 
     'total_valor_po_com_impostos_formatted',
     'Order Quantity',
-    'total_itens_po'
+    'total_itens_po',
+    'concatenada'
 ]
 
 class DataProcessor:
@@ -113,7 +127,7 @@ class DataProcessor:
             groupby_cols = ['Purchasing Document']
             df_processed['total_valor_po_liquido'] = df_processed.groupby(groupby_cols)['Net order value'].transform('sum')
             df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
-            df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Item'].transform('count')
+            df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Order Quantity'].transform('sum')
             
             df_processed['concatenada'] = (
                 df_processed['Purchasing Document'].astype(str) + 
@@ -291,6 +305,7 @@ def main():
     if uploaded_files:
         if st.button("🚀 Iniciar Processamento", use_container_width=True):
             try:
+                timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
                 with st.spinner("Processando arquivos..."):
                     progress_bar = st.progress(0)
                     status_placeholder = st.empty()
@@ -312,7 +327,7 @@ def main():
                         df_processed = DataProcessor.process_dataframe(df_final, progress_bar)
                         
                         st.session_state.processed_data = df_processed
-                        timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
+                        
                         st.session_state.download_filename = f'processamento_po_{timestamp}.xlsx'
                         
                         # Convert to base64 and store in session state
