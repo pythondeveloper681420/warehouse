@@ -171,10 +171,32 @@ class FileHandler:
             logger.error(f"Error reading file {file.name}: {str(e)}")
             return None
 
+def clear_session_state():
+    """Clear all session state variables"""
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    gc.collect()
+
 def get_download_link(b64_data: str, filename: str) -> str:
-    """Generate HTML download link for Excel file"""
+    """Generate HTML download link for Excel file with callback"""
     href = f'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_data}'
-    return f'<a href="{href}" download="{filename}" class="downloadButton">📥 Baixar Arquivo Excel Processado</a>'
+    return f'''
+        <a href="{href}" 
+           download="{filename}" 
+           class="downloadButton"
+           onclick="setTimeout(function(){{ window.location.href = window.location.pathname; }}, 1000);">
+           📥 Baixar Arquivo Excel Processado
+        </a>
+        <script>
+            window.addEventListener('load', function() {{
+                document.querySelector('.downloadButton').addEventListener('click', function() {{
+                    setTimeout(function() {{
+                        window.location.reload();
+                    }}, 1000);
+                }});
+            }});
+        </script>
+    '''
 
 def main():
     """Main application function"""
@@ -202,19 +224,21 @@ def main():
             font-weight: 500;
         }
         .downloadButton:hover {
-            background-color: #FF0000;
+            background-color: #4098ce;
             color: white;
             text-decoration: none;
         }
         </style>
     """, unsafe_allow_html=True)
     
-    if 'processed_data' not in st.session_state:
+    # Initialize session state
+    if 'initialized' not in st.session_state:
+        clear_session_state()
+        st.session_state.initialized = True
         st.session_state.processed_data = None
-    if 'download_filename' not in st.session_state:
         st.session_state.download_filename = None
-    if 'excel_data' not in st.session_state:
         st.session_state.excel_data = None
+        st.session_state.download_triggered = False
     
     st.title("📊 Sistema de Processamento de Pedidos de Compra")
     
@@ -298,7 +322,11 @@ def main():
             st.session_state.download_filename
         )
         st.markdown(download_link, unsafe_allow_html=True)
-        st.rerun()
+
+        # Add a button to manually clear the cache and return to initial state
+        if st.button("🔄 Limpar e Voltar ao Início", use_container_width=True):
+            clear_session_state()
+            st.rerun()
 
 if __name__ == "__main__":
     try:
