@@ -114,6 +114,7 @@ def process_dataframe(df: pd.DataFrame, progress_bar: Any) -> pd.DataFrame:
         df_processed = df_processed.dropna(subset=['Purchasing Document'])
         df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
         df_processed = df_processed.sort_values(by='Purchasing Document', ascending=False)
+        df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'],dayfirst=True)
         
         # Format currency columns
         currency_columns = [
@@ -140,9 +141,10 @@ def process_dataframe(df: pd.DataFrame, progress_bar: Any) -> pd.DataFrame:
                     dayfirst=True,
                     errors='coerce'
                 )
-                df_processed[col] = df_processed[col].dt.strftime('%d/%m/%Y')
-        
+                df_processed[col] = df_processed[col].dt.strftime('%d/%m/%Y')   
         return df_processed
+    
+        
         
     except Exception as e:
         logger.error(f"Error in process_dataframe: {str(e)}")
