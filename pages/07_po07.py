@@ -326,7 +326,7 @@ def main():
         # Add a button to manually clear the cache and return to initial state
         if st.button("🔄 Limpar e Voltar ao Início", use_container_width=True):
             clear_session_state()
-            st.experimental_rerun()
+            st.rerun()
 
 if __name__ == "__main__":
     try:
