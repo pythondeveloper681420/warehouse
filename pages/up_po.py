@@ -18,6 +18,19 @@ MAX_UPLOAD_SIZE_MB = 200
 BYTES_PER_MB = 1024 * 1024
 CHUNK_SIZE = 10000  # Number of rows to process at once
 
+# Colunas selecionadas para salvar no arquivo final
+SELECTED_COLUMNS = [
+    'Purchasing Document', 
+    'Item', 
+    'Document Date', 
+    'PO Creation Date',
+    'valor_unitario_formatted', 
+    'total_valor_po_liquido_formatted', 
+    'total_valor_po_com_impostos_formatted',
+    'Order Quantity',
+    'total_itens_po'
+]
+
 class DataProcessor:
     """Class to handle all data processing operations"""
     
@@ -112,6 +125,7 @@ class DataProcessor:
             df_processed = df_processed.dropna(subset=['Purchasing Document'])
             df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
             df_processed = df_processed.sort_values(by='Purchasing Document', ascending=False)
+            df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'], dayfirst=True)
             
             currency_columns = [
                 'valor_unitario', 'valor_item_com_impostos', 'Net order value',
@@ -137,6 +151,9 @@ class DataProcessor:
                         errors='coerce'
                     )
                     df_processed[col] = df_processed[col].dt.strftime('%d/%m/%Y')
+                    
+            # Select only the desired columns
+            df_processed = df_processed[SELECTED_COLUMNS]        
             
             return df_processed
             
@@ -241,8 +258,10 @@ def main():
         st.session_state.download_triggered = False
     
     st.title("📊 Sistema de Processamento de Pedidos de Compra")
-    
-    st.subheader("📁 Seleção de Arquivos")
+
+    st.markdown("---")
+
+    #st.subheader("📁 Seleção de Arquivos")
     
     col1, col2 = st.columns([3, 1])
     
@@ -334,3 +353,14 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
         st.error("Ocorreu um erro inesperado. Por favor, tente novamente.")
+        
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center'>
+        <p>Desenvolvido com ❤️ | XML Processor Pro v1.0</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)        
