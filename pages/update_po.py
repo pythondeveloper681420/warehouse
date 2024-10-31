@@ -221,6 +221,7 @@ def main():
         st.session_state.download_ready = False
     
     st.title("📊 Sistema de Processamento de Pedidos de Compra")
+    st.markdown("---")
     
     # File upload
     uploaded_files = st.file_uploader(
@@ -300,3 +301,15 @@ if __name__ == "__main__":
         logger.error(f"Application error: {str(e)}")
         st.error("❌ Erro inesperado. Por favor, tente novamente.")
         clear_all_cache()
+
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center'>
+        <p>Desenvolvido com ❤️ | XML Processor Pro v1.0</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)        
+        
