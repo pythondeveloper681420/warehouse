@@ -189,7 +189,7 @@ def main():
     st.markdown("""
         <style>
         .downloadButton {
-            background-color: #FF4B4B;
+            background-color: #0075be;
             color: white;
             padding: 0.5em 1em;
             text-decoration: none;
@@ -298,6 +298,7 @@ def main():
             st.session_state.download_filename
         )
         st.markdown(download_link, unsafe_allow_html=True)
+        st.rerun()
 
 if __name__ == "__main__":
     try:
