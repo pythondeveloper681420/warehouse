@@ -124,8 +124,9 @@ class DataProcessor:
             df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
             df_processed = df_processed.dropna(subset=['Purchasing Document'])
             df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
-            df_processed = df_processed.sort_values(by='Purchasing Document', ascending=False)
+            
             df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'], dayfirst=True)
+            df_processed = df_processed.sort_values(by='PO Creation Date', ascending=False)
             
             currency_columns = [
                 'valor_unitario', 'valor_item_com_impostos', 'Net order value',
@@ -221,7 +222,7 @@ def main():
         page_title="Sistema de Processamento de PO",
         page_icon="📊",
         layout="wide",
-        initial_sidebar_state="expanded"
+        initial_sidebar_state="collapsed"
     )
     
     # Add custom CSS for download button
@@ -359,7 +360,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center'>
-        <p>Desenvolvido com ❤️ | XML Processor Pro v1.0</p>
+        <p>Desenvolvido com ❤️ | PO Processor Pro v1.0</p>
     </div>
     """,
     unsafe_allow_html=True

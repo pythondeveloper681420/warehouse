@@ -18,7 +18,7 @@ st.set_page_config(
     page_title="XML Processor Pro",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Custom CSS
@@ -70,12 +70,12 @@ with st.container():
     st.title("🔄 Processador de Notas Fiscais XML")
     st.markdown("---")
 
-# Sidebar for configuration
-with st.sidebar:
-    st.header("⚙️ Configurações")
-    st.markdown("---")
-    show_raw = st.toggle("Mostrar dados brutos", value=False)
-    enable_filters = st.toggle("Habilitar filtros avançados", value=False)
+# # Sidebar for configuration
+# with st.sidebar:
+#     st.header("⚙️ Configurações")
+#     st.markdown("---")
+#     show_raw = st.toggle("Mostrar dados brutos", value=False)
+#     enable_filters = st.toggle("Habilitar filtros avançados", value=False)
 
 # Main content area
 uploaded_files = st.file_uploader(
@@ -520,27 +520,27 @@ if uploaded_files:
                     st.metric("Valor Médio por Nota", f"R$ {avg_value:,.2f}")
 
                 # Filters
-                if enable_filters:
-                    st.subheader("🔍 Filtros")
-                    col1, col2 = st.columns(2)
+                # if enable_filters:
+                #     st.subheader("🔍 Filtros")
+                #     col1, col2 = st.columns(2)
                     
-                    with col1:
-                        selected_emit = st.multiselect(
-                            "Filtrar por Emitente",
-                            options=sorted(df['emitNome'].unique())
-                        )
+                #     with col1:
+                #         selected_emit = st.multiselect(
+                #             "Filtrar por Emitente",
+                #             options=sorted(df['emitNome'].unique())
+                #         )
                     
-                    with col2:
-                        selected_dest = st.multiselect(
-                            "Filtrar por Destinatário",
-                            options=sorted(df['destNome'].unique())
-                        )
+                #     with col2:
+                #         selected_dest = st.multiselect(
+                #             "Filtrar por Destinatário",
+                #             options=sorted(df['destNome'].unique())
+                #         )
 
-                    # Apply filters
-                    if selected_emit:
-                        df = df[df['emitNome'].isin(selected_emit)]
-                    if selected_dest:
-                        df = df[df['destNome'].isin(selected_dest)]
+                #     # Apply filters
+                #     if selected_emit:
+                #         df = df[df['emitNome'].isin(selected_emit)]
+                #     if selected_dest:
+                #         df = df[df['destNome'].isin(selected_dest)]
 
                 # Show data
                 st.subheader("📊 Dados Processados")
