@@ -300,8 +300,8 @@ def main():
             # Agrupando por 'Category' e somando os valores de 'Value'
             df['vlNf'] = df.groupby('chaveNfe')['vlTotProd'].transform('sum')
 
-            # Adicionando coluna 'Concat' contendo a concatenação das colunas 'NFe' e 'Item Nota'
-            df['Concat'] = df['NFe'] + df['Item Nota'].astype(str) + df['Descrição']
+            # Adicionando coluna 'unique' 
+            df['unique'] = df['NFe'] + df['Item Nota'].astype(str) + df['Descrição']
             df['Descrição'] = df['Descrição'].apply(clean_description).str.upper()
             
             # Aplicar a função para filtrar e formatar a coluna 'info_adic'
@@ -328,14 +328,12 @@ def main():
             first_po_dict = get_first_non_empty_po(df)
             df['po'] = df['chaveNfe'].map(first_po_dict)
     ##               
-            # Remover linhas duplicadas com base na coluna 'Concat'
-            df.drop_duplicates(subset='Concat', inplace=True)
+            # Remover linhas duplicadas com base na coluna 'unique'
+            df.drop_duplicates(subset='unique', inplace=True)
 
-            # Remover a coluna 'Concat'
-            df = df.drop(columns=['Concat'], axis=1)
-            
-            df['data_emit'] = df['Data de Emissão']
-            
+            # Remover a coluna 'unique'
+            #df = df.drop(columns=['unique'], axis=1)
+              
             def format_date_to_brazilian(df, columns):
                 """
                 Converte as colunas especificadas para o formato de data brasileiro (dd/mm/aaaa).
@@ -370,7 +368,7 @@ def main():
                 return df
 
             # Aplicar a formatação desejada
-            df = format_date_to_brazilian(df, ['dVenc','data_emit'])
+            df = format_date_to_brazilian(df, ['dVenc'])
                                         
             #Função para formatar colunas como moeda brasileira (BRL)
             
@@ -418,7 +416,7 @@ def main():
                                     'Duplicata','Valor Original','Valor Pago',
                                     'Logradouro Emitente','Número Emitente','Complemento Emitente','Bairro Emitente','Município Emitente','UF Emitente','CEP Emitente','País Emitente',
                                     'Logradouro Destinatário','Número Destinatário','Complemento Destinatário','Bairro Destinatário','Município Destinatário','UF Destinatário','CEP Destinatário','País Destinatário',
-                                    'vlNf','po','data_emit']
+                                    'vlNf','po','unique']
             
             # Renomear as colunas
 
@@ -428,13 +426,13 @@ def main():
                             'chaveNfe':'chNfe',
                             'Nome Emitente': 'emitNome','CNPJ Emitente':'emitCnpj','Logradouro Emitente':'emitLogr','Número Emitente':'emitNr','Complemento Emitente':'emitCompl','Bairro Emitente':'emitBairro','Município Emitente':'emitMunic','UF Emitente':'emitUf','CEP Emitente':'emitCep','País Emitente':'emitPais',
                             'Nome Destinatário': 'destNome','CNPJ Destinatário':'destCnpj','Logradouro Destinatário':'destLogr','Número Destinatário':'destNr','Complemento Destinatário':'destCompl','Bairro Destinatário':'destBairro','Município Destinatário':'destMunic','UF Destinatário':'destUf','CEP Destinatário':'destCep','País Destinatário':'destPais',
-                            'cfop':'cfop','data_emit':'dt_emit'})
+                            'cfop':'cfop','unique':'unique'})
 
             # Exibir apenas as colunas renomeadas
             colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
                                     'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
                                     'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                    'cfop','dt_emit']
+                                    'cfop','unique']
             
             df= df[colunas_renomeadas]
             
@@ -469,12 +467,12 @@ def main():
             
             df_merged= df_merged[colunas_renomeadas]
             
-            df_merged['Concat'] = df_merged['nNf'].astype(str) + df_merged['itemNf'].astype(str) + df_merged['nomeMaterial']
-                            # Remover linhas duplicadas com base na coluna 'Concat'
-            df_merged.drop_duplicates(subset='Concat', inplace=True)
+            df_merged['unique'] = df_merged['nNf'].astype(str) + df_merged['itemNf'].astype(str) + df_merged['nomeMaterial']
+                            # Remover linhas duplicadas com base na coluna 'unique'
+            df_merged.drop_duplicates(subset='unique', inplace=True)
 
-            # Remover a coluna 'Concat'
-            df_merged = df_merged.drop(columns=['Concat'], axis=1)
+            # Remover a coluna 'unique'
+            #df_merged = df_merged.drop(columns=['unique'], axis=1)
             
             df=df_merged
             df = df.sort_values(by=['dtEmi','nNf','itemNf'], ascending=[False,True,True])
