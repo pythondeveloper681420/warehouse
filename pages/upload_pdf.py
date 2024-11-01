@@ -337,7 +337,7 @@ def main():
                     
                  # Criar DataFrame e remover duplicatas
                 df_nf = pd.DataFrame(dados_extraidos)
-                df_nf = df_nf.drop_duplicates(subset=['Numero NFS-e'])
+                #df_nf = df_nf.drop_duplicates(subset=['Numero NFS-e'])
                 
                 # Processar datas e filtrar registros válidos
                 # df_nf['Data Emissão'] = pd.to_datetime(df_nf['Data Emissão'], format='%d/%m/%Y %H:%M', errors='coerce')
