@@ -48,17 +48,6 @@ st.markdown("""
         border-radius: 10px;
         margin-bottom: 2rem;
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #fff;
-        border-radius: 5px;
-        color: #000;
-        font-size: 16px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -305,17 +294,10 @@ def to_excel(df):
     return b64
 
 def main():
-    # Header with modern design
-    st.markdown("""
-        <div class="title-container">
-            <h1>📄 Extrator de Notas Fiscais</h1>
-            <p>Extraia informações de Notas Fiscais em PDF de forma rápida e eficiente</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.header(" 📝 Extrator de Notas Fiscais de serviço")
 
     # Main content
-     # Main content
-    tabs = st.tabs(["Upload e Extração", "Visualização dos Dados", "Como Usar"])
+    tabs = st.tabs(["📤 Upload e Extração", " 📊 Visualização dos Dados" ," 🔎 Como Usar"])
     
     with tabs[0]:
         # [Previous upload tab code remains the same]
@@ -377,14 +359,14 @@ def main():
             with col1:
                 if not df_nf.empty and 'Razao Social Prestador' in df_nf.columns:
                     prestador_filter = st.multiselect(
-                        'Filtrar por Prestador',
+                        ' 🧑‍🔧 Filtrar por Prestador',
                         options=sorted(df_nf['Razao Social Prestador'].unique())
                     )
             
             with col2:
                 if not df_nf.empty:
                     date_range = st.date_input(
-                        'Filtrar por Período',
+                        ' 📅 Filtrar por Período',
                         value=(df_nf['Data Emissão'].min().date(), 
                               df_nf['Data Emissão'].max().date())
                     )
@@ -427,46 +409,57 @@ def main():
 
     with tabs[2]:
         st.markdown("""
-        # Como Usar o Extrator de Notas Fiscais
+        ## Como Usar o Extrator de Notas Fiscais
 
-        ## 1. Upload de Arquivos
-        ### Preparação
+        ### 1. Upload de Arquivos
+        #### Preparação
         - Certifique-se de que seus arquivos estão em formato PDF
         - Verifique se os PDFs são legíveis e não estão protegidos por senha
         - Organize seus arquivos em uma pasta de fácil acesso
 
-        ### Processo de Upload
+        #### Processo de Upload
         1. Acesse a aba "Upload e Extração"
         2. Arraste os arquivos para a área de upload ou clique para selecionar
         3. Aguarde o processamento dos arquivos
         4. Após o processamento, você verá um resumo da extração
         5. Baixe os dados em Excel usando o botão "Baixar Excel"
 
-        ## 2. Visualização e Análise
-        ### Filtros Disponíveis
+        ### 2. Visualização e Análise
+        #### Filtros Disponíveis
         - **Prestador**: Selecione um ou mais prestadores de serviço
         - **Período**: Defina um intervalo de datas específico
 
-        ### Métricas e Dados
+        #### Métricas e Dados
         - Visualize métricas consolidadas no topo da página
         - Examine os dados detalhados na tabela abaixo
         - Use as funcionalidades de ordenação e busca da tabela
 
-        ## 3. Dicas Importantes
+        ### 3. Dicas Importantes
         - Para melhores resultados, use PDFs originais das notas fiscais
         - Os arquivos são processados localmente e não são armazenados
         - Recomenda-se processar lotes de até 50 arquivos por vez
         - Verifique sempre os dados extraídos para garantir a precisão
 
-        ## 4. Resolução de Problemas
-        ### Problemas Comuns
+        ### 4. Resolução de Problemas
+        #### Problemas Comuns
         - **Arquivo não processado**: Verifique se o PDF está em formato correto
         - **Dados faltando**: Certifique-se de que o PDF está legível
         - **Valores incorretos**: Confirme se o formato do PDF está padronizado
 
-        ### Suporte
+        #### Suporte
         Em caso de dúvidas ou problemas, entre em contato com o suporte técnico.
         """)
-
+        
+    # Rodapé
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center'>
+            <p style='color: #888;'>Desenvolvido com ❤️ | Extrator de dados nf's PDF Pro v1.0</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
 if __name__ == "__main__":
     main()
