@@ -302,7 +302,7 @@ def main():
                 value=f"{remaining_size:.1f}MB"
             )
     if uploaded_files:
-        if st.button("🚀 Iniciar Processamento", use_container_width=True):
+        if st.button("🚀 Iniciar Processamento", use_container_width=True, type="primary"):
             try:
                 timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
                 with st.spinner("Processando arquivos..."):
