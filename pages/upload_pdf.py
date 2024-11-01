@@ -314,9 +314,11 @@ def main():
     """, unsafe_allow_html=True)
 
     # Main content
-    tabs = st.tabs(["Upload e Extração", "Visualização dos Dados"])
+     # Main content
+    tabs = st.tabs(["Upload e Extração", "Visualização dos Dados", "Como Usar"])
     
     with tabs[0]:
+        # [Previous upload tab code remains the same]
         col1, col2 = st.columns([2, 1])
         
         with col1:
@@ -335,16 +337,7 @@ def main():
                     dados_extraidos.append(dados_nf)
                     progress_bar.progress((i + 1) / len(uploaded_files))
                     
-                 # Criar DataFrame e remover duplicatas
                 df_nf = pd.DataFrame(dados_extraidos)
-                #df_nf = df_nf.drop_duplicates(subset=['Numero NFS-e'])
-                
-                # Processar datas e filtrar registros válidos
-                # df_nf['Data Emissão'] = pd.to_datetime(df_nf['Data Emissão'], format='%d/%m/%Y %H:%M', errors='coerce')
-                # df_nf = df_nf[df_nf['Numero NFS-e'].notna()]
-                # df_nf = df_nf.sort_values(by='Data Emissão', ascending=False)    
-
-                #df_nf = pd.DataFrame(dados_extraidos)
                 
                 # Process data
                 df_nf['Data Emissão'] = pd.to_datetime(df_nf['Data Emissão'], format='%d/%m/%Y %H:%M')
@@ -365,10 +358,8 @@ def main():
                                 f"{df_nf['Data Emissão'].min().strftime('%d/%m/%Y')} - "
                                 f"{df_nf['Data Emissão'].max().strftime('%d/%m/%Y')}")
 
-                # Save to session state for access in other tab
                 st.session_state['df_nf'] = df_nf
                 
-                # Download button
                 excel_file = to_excel(df_nf)
                 st.download_button(
                     label="📥 Baixar Excel",
@@ -408,30 +399,74 @@ def main():
                     (df_filtered['Data Emissão'].dt.date <= date_range[1])
                 ]
             
-            # Display filtered data
+            # Show summary metrics first
+            if not df_filtered.empty:
+                st.markdown("### Métricas")
+                met_col1, met_col2, met_col3 = st.columns(3)
+                with met_col1:
+                    st.metric("Total de NFs", len(df_filtered))
+                with met_col2:
+                    if 'Valor do Servico' in df_filtered.columns:
+                        total_valor = df_filtered['Valor do Servico'].apply(convert_brazilian_number).sum()
+                        st.metric("Valor Total", f"R$ {total_valor:,.2f}")
+                with met_col3:
+                    if 'Valor Liquido' in df_filtered.columns:
+                        total_liquido = df_filtered['Valor Liquido'].apply(convert_brazilian_number).sum()
+                        st.metric("Valor Líquido Total", f"R$ {total_liquido:,.2f}")
+            
+            # Display filtered data below metrics
+            st.markdown("### Dados Detalhados")
             st.dataframe(
                 df_filtered,
                 use_container_width=True,
                 height=400
             )
             
-            # Show summary metrics
-            # Show summary metrics
-            if not df_filtered.empty:
-                st.markdown("### Métricas")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total de NFs", len(df_filtered))
-                with col2:
-                    if 'Valor do Servico' in df_filtered.columns:
-                        total_valor = df_filtered['Valor do Servico'].apply(convert_brazilian_number).sum()
-                        st.metric("Valor Total", f"R$ {total_valor:,.2f}")
-                with col3:
-                    if 'Valor Liquido' in df_filtered.columns:
-                        total_liquido = df_filtered['Valor Liquido'].apply(convert_brazilian_number).sum()
-                        st.metric("Valor Líquido Total", f"R$ {total_liquido:,.2f}")
         else:
             st.info("Faça o upload dos arquivos na aba 'Upload e Extração' para visualizar os dados.")
+
+    with tabs[2]:
+        st.markdown("""
+        # Como Usar o Extrator de Notas Fiscais
+
+        ## 1. Upload de Arquivos
+        ### Preparação
+        - Certifique-se de que seus arquivos estão em formato PDF
+        - Verifique se os PDFs são legíveis e não estão protegidos por senha
+        - Organize seus arquivos em uma pasta de fácil acesso
+
+        ### Processo de Upload
+        1. Acesse a aba "Upload e Extração"
+        2. Arraste os arquivos para a área de upload ou clique para selecionar
+        3. Aguarde o processamento dos arquivos
+        4. Após o processamento, você verá um resumo da extração
+        5. Baixe os dados em Excel usando o botão "Baixar Excel"
+
+        ## 2. Visualização e Análise
+        ### Filtros Disponíveis
+        - **Prestador**: Selecione um ou mais prestadores de serviço
+        - **Período**: Defina um intervalo de datas específico
+
+        ### Métricas e Dados
+        - Visualize métricas consolidadas no topo da página
+        - Examine os dados detalhados na tabela abaixo
+        - Use as funcionalidades de ordenação e busca da tabela
+
+        ## 3. Dicas Importantes
+        - Para melhores resultados, use PDFs originais das notas fiscais
+        - Os arquivos são processados localmente e não são armazenados
+        - Recomenda-se processar lotes de até 50 arquivos por vez
+        - Verifique sempre os dados extraídos para garantir a precisão
+
+        ## 4. Resolução de Problemas
+        ### Problemas Comuns
+        - **Arquivo não processado**: Verifique se o PDF está em formato correto
+        - **Dados faltando**: Certifique-se de que o PDF está legível
+        - **Valores incorretos**: Confirme se o formato do PDF está padronizado
+
+        ### Suporte
+        Em caso de dúvidas ou problemas, entre em contato com o suporte técnico.
+        """)
 
 if __name__ == "__main__":
     main()
