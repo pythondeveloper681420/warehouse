@@ -42,7 +42,7 @@ SELECTED_COLUMNS = [
     'total_valor_po_com_impostos_formatted',
     'Order Quantity',
     'total_itens_po',
-    'concatenada'
+    'unique'
 ]
 
 class DataProcessor:
@@ -129,11 +129,11 @@ class DataProcessor:
             df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
             df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Order Quantity'].transform('sum')
             
-            df_processed['concatenada'] = (
+            df_processed['unique'] = (
                 df_processed['Purchasing Document'].astype(str) + 
                 df_processed['Item'].astype(str)
             )
-            df_processed = df_processed.drop_duplicates(subset=['concatenada'])
+            df_processed = df_processed.drop_duplicates(subset=['unique'])
             
             df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
             df_processed = df_processed.dropna(subset=['Purchasing Document'])
