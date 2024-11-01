@@ -297,7 +297,7 @@ def main():
     st.header(" 📝 Extrator de Notas Fiscais de serviço")
 
     # Main content
-    tabs = st.tabs(["📤 Upload e Extração", " 📊 Visualização dos Dados" ," 🔎 Como Usar"])
+    tabs = st.tabs(["📤 Upload e Extração", " 📊 Visualização dos Dados" ,"❓Como Utilizar"])
     
     with tabs[0]:
         # [Previous upload tab code remains the same]

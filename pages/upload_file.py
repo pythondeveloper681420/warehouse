@@ -204,7 +204,7 @@ def main():
     # Container principal
     with st.container():
         # Tabs para separar upload e limpeza
-        tab1, tab2 = st.tabs(["📤 Upload de Dados", "🧹 Limpeza de Dados"])
+        tab1, tab2, tab3 = st.tabs(["📤 Upload de Dados", "🧹 Limpeza de Dados", " ❓Como Utilizar"])
         
         # Tab de Upload
         with tab1:
@@ -328,8 +328,97 @@ def main():
                     st.warning("⚠️ Nenhum campo encontrado na coleção ou coleção vazia!")
             else:
                 st.info("👆 Por favor, insira o nome da coleção para prosseguir", icon="ℹ️")
-    
-    # Rodapé
+        with tab3:
+                st.subheader("📖 Guia de Utilização")
+                
+                # Seção de Upload de Dados
+                st.markdown("### 📤 Upload de Dados")
+                st.markdown("""
+                1. **Preparação do Arquivo**:
+                - Prepare seu arquivo Excel (.xlsx ou .xls)
+                - Certifique-se de que os dados estejam organizados em colunas
+                - Verifique se não há caracteres especiais nos cabeçalhos
+                
+                2. **Processo de Upload**:
+                - Clique no botão "Browse files" para selecionar seu arquivo
+                - Digite um nome para sua coleção no MongoDB
+                - Verifique a prévia dos dados exibida
+                - Confirme os tipos de dados das colunas
+                - Clique em "Enviar para MongoDB" para iniciar o upload
+                
+                3. **Verificação**:
+                - Aguarde a mensagem de confirmação
+                - Verifique o número de registros inseridos
+                - Em caso de erro, leia a mensagem de erro para orientações
+                """)
+                
+                # Seção de Limpeza de Dados
+                st.markdown("### 🧹 Limpeza de Dados")
+                st.markdown("""
+                1. **Remoção de Duplicatas**:
+                - Digite o nome da coleção que deseja limpar
+                - Selecione o campo que será usado para identificar duplicatas
+                - Escolha o método de limpeza:
+                    * **Rápido**: Ideal para coleções menores (usa mais memória)
+                    * **Em Lotes**: Recomendado para coleções grandes (mais lento, usa menos memória)
+                
+                2. **Processo de Limpeza**:
+                - Confirme sua seleção
+                - Clique em "Remover Duplicatas"
+                - Aguarde o processo ser concluído
+                - Verifique o número de documentos removidos e restantes
+                """)
+                
+                # Seção de Dicas e Boas Práticas
+                st.markdown("### 💡 Dicas e Boas Práticas")
+                with st.expander("Expandir Dicas", expanded=False):
+                    st.markdown("""
+                    - **Preparação de Dados**:
+                        * Limpe seus dados antes do upload
+                        * Padronize os formatos de data
+                        * Evite células vazias quando possível
+                    
+                    - **Performance**:
+                        * Para arquivos grandes, prefira o upload em horários de menor uso
+                        * Use o método de limpeza em lotes para grandes volumes de dados
+                        * Mantenha backups antes de realizar limpezas
+                    
+                    - **Resolução de Problemas**:
+                        * Em caso de timeout, tente novamente
+                        * Verifique sua conexão com a internet
+                        * Para erros persistentes, verifique o formato dos dados
+                    """)
+                
+                # Seção de FAQ
+                st.markdown("### ❓ Perguntas Frequentes")
+                with st.expander("Expandir FAQ", expanded=False):
+                    st.markdown("""
+                    **P: Quais formatos de arquivo são aceitos?**  
+                    R: Arquivos Excel (.xlsx e .xls)
+                    
+                    **P: Existe um limite de tamanho de arquivo?**  
+                    R: Sim, o limite é determinado pela sua memória disponível e conexão
+                    
+                    **P: Como sei se meu upload foi bem-sucedido?**  
+                    R: Uma mensagem de sucesso será exibida com o número de registros inseridos
+                    
+                    **P: Posso interromper um processo de limpeza?**  
+                    R: Sim, você pode fechar a página, mas isso pode deixar dados parcialmente processados
+                    
+                    **P: Os dados são sobrescritos na limpeza?**  
+                    R: Sim, ao remover duplicatas, os registros são atualizados permanentemente
+                    """)
+                
+                # Seção de Contato/Suporte
+                st.markdown("### 📞 Suporte")
+                st.info("""
+                Para suporte adicional ou relatar problemas:
+                - Abra um ticket no sistema de suporte
+                - Entre em contato com a equipe de desenvolvimento
+                - Consulte a documentação técnica completa
+                """)
+
+    # Rodapé [Previous code remains the same...]
     st.markdown("---")
     st.markdown(
         """

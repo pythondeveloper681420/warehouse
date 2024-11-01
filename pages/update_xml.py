@@ -209,7 +209,7 @@ def main():
     # st.title("XML Invoice Processor 📄")
 
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["🔬 Processamento", "📊 Visualização de Dados", "❓ Como Utilizar"])
+    tab1, tab2, tab3 = st.tabs(["📤 Upload e Extração", "📊 Visualização de Dados", "❓ Como Utilizar"])
 
     with tab1:
         st.header("Processamento de Arquivos XML")

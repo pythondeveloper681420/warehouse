@@ -277,90 +277,134 @@ def main():
     st.markdown("---")
 
     #st.subheader("📁 Seleção de Arquivos")
-    
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        uploaded_files = st.file_uploader(
-            "Selecione os arquivos Excel para processar",
-            type=['xlsx'],
-            accept_multiple_files=True,
-            help="Você pode selecionar múltiplos arquivos Excel (.xlsx)"
-        )
-    
-    with col2:
-        if uploaded_files:
-            total_size = FileHandler.calculate_total_size(uploaded_files)
-            remaining_size = MAX_UPLOAD_SIZE_MB - total_size
-            
-            st.metric(
-                label="📦 Espaço utilizado",
-                value=f"{total_size:.1f}MB"
-            )
-            st.metric(
-                label="⚡ Espaço disponível",
-                value=f"{remaining_size:.1f}MB"
-            )
-    if uploaded_files:
-        if st.button("🚀 Iniciar Processamento", use_container_width=True, type="primary"):
-            try:
-                timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-                with st.spinner("Processando arquivos..."):
-                    progress_bar = st.progress(0)
-                    status_placeholder = st.empty()
-                    
-                    start_time = time.time()
-                    all_dfs = []
-                    
-                    for idx, uploaded_file in enumerate(uploaded_files):
-                        status_placeholder.info(f"Processando: {uploaded_file.name}")
-                        df_temp = FileHandler.read_excel_file(uploaded_file)
-                        
-                        if df_temp is not None and not df_temp.empty:
-                            all_dfs.append(df_temp)
-                        
-                        progress_bar.progress((idx + 1) / len(uploaded_files))
-                    
-                    if all_dfs:
-                        df_final = pd.concat(all_dfs, ignore_index=True)
-                        df_processed = DataProcessor.process_dataframe(df_final, progress_bar)
-                        
-                        st.session_state.processed_data = df_processed
-                        
-                        st.session_state.download_filename = f'processamento_po_{timestamp}.xlsx'
-                        
-                        # Convert to base64 and store in session state
-                        st.session_state.excel_data = FileHandler.to_excel(df_processed)
-                        
-                        elapsed_time = time.time() - start_time
-                        
-                        st.success("✅ Processamento concluído com sucesso!")
-                        
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("Tempo de processamento", f"{elapsed_time:.2f}s")
-                        col2.metric("Arquivos processados", len(uploaded_files))
-                        col3.metric("Registros processados", len(df_processed))
-                    else:
-                        st.warning("⚠️ Nenhum dado encontrado para processar!")
-                    
-                    gc.collect()
-            
-            except Exception as e:
-                logger.error(f"Error during processing: {str(e)}")
-                st.error(f"❌ Erro durante o processamento: {str(e)}")
-    
-    if st.session_state.excel_data is not None:
-        st.subheader("📥 Download do Arquivo Processado")
-        download_link = get_download_link(
-            st.session_state.excel_data,
-            st.session_state.download_filename
-        )
-        st.markdown(download_link, unsafe_allow_html=True)
+    tab1, tab2, tab3 = st.tabs(["📤 Upload e Extração", "📊 Visualização de Dados", "❓ Como Utilizar"])
 
-        # Add a button to manually clear the cache and return to initial state
-        if st.button("🔄 Limpar e Voltar ao Início", use_container_width=True):
-            clear_session_state()
-            st.rerun()
+    with tab1:   
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            uploaded_files = st.file_uploader(
+                "Selecione os arquivos Excel para processar",
+                type=['xlsx'],
+                accept_multiple_files=True,
+                help="Você pode selecionar múltiplos arquivos Excel (.xlsx)"
+            )
+        
+        with col2:
+            if uploaded_files:
+                total_size = FileHandler.calculate_total_size(uploaded_files)
+                remaining_size = MAX_UPLOAD_SIZE_MB - total_size
+                
+                st.metric(
+                    label="📦 Espaço utilizado",
+                    value=f"{total_size:.1f}MB"
+                )
+                st.metric(
+                    label="⚡ Espaço disponível",
+                    value=f"{remaining_size:.1f}MB"
+                )
+        if uploaded_files:
+            if st.button("🚀 Iniciar Processamento", use_container_width=True, type="primary"):
+                try:
+                    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
+                    with st.spinner("Processando arquivos..."):
+                        progress_bar = st.progress(0)
+                        status_placeholder = st.empty()
+                        
+                        start_time = time.time()
+                        all_dfs = []
+                        
+                        for idx, uploaded_file in enumerate(uploaded_files):
+                            status_placeholder.info(f"Processando: {uploaded_file.name}")
+                            df_temp = FileHandler.read_excel_file(uploaded_file)
+                            
+                            if df_temp is not None and not df_temp.empty:
+                                all_dfs.append(df_temp)
+                            
+                            progress_bar.progress((idx + 1) / len(uploaded_files))
+                        
+                        if all_dfs:
+                            df_final = pd.concat(all_dfs, ignore_index=True)
+                            df_processed = DataProcessor.process_dataframe(df_final, progress_bar)
+                            
+                            st.session_state.processed_data = df_processed
+                            
+                            st.session_state.download_filename = f'processamento_po_{timestamp}.xlsx'
+                            
+                            # Convert to base64 and store in session state
+                            st.session_state.excel_data = FileHandler.to_excel(df_processed)
+                            
+                            elapsed_time = time.time() - start_time
+                            
+                            st.success("✅ Processamento concluído com sucesso!")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            col1.metric("Tempo de processamento", f"{elapsed_time:.2f}s")
+                            col2.metric("Arquivos processados", len(uploaded_files))
+                            col3.metric("Registros processados", len(df_processed))
+                        else:
+                            st.warning("⚠️ Nenhum dado encontrado para processar!")
+                        
+                        gc.collect()
+                
+                except Exception as e:
+                    logger.error(f"Error during processing: {str(e)}")
+                    st.error(f"❌ Erro durante o processamento: {str(e)}")
+        
+        if st.session_state.excel_data is not None:
+            st.subheader("📥 Download do Arquivo Processado")
+            download_link = get_download_link(
+                st.session_state.excel_data,
+                st.session_state.download_filename
+            )
+            st.markdown(download_link, unsafe_allow_html=True)
+
+            # Add a button to manually clear the cache and return to initial state
+            if st.button("🔄 Limpar e Voltar ao Início", use_container_width=True):
+                clear_session_state()
+                st.rerun()
+                
+    with tab2:
+       st.text("tab2")
+    
+    with tab3:
+        st.subheader("📖 Guia de Utilização")
+        st.markdown("""
+        ### Como usar o Sistema de Processamento de PO
+        
+        1. **Upload de Arquivos**
+           - Acesse a aba "Upload e Extração"
+           - Selecione um ou mais arquivos Excel (.xlsx)
+           - O sistema aceita arquivos até 200MB no total
+        
+        2. **Processamento**
+           - Clique em "Iniciar Processamento"
+           - Aguarde o processamento ser concluído
+           - Faça o download do arquivo processado
+        
+        3. **Visualização**
+           - Acesse a aba "Visualização de Dados"
+           - Explore os gráficos e métricas
+           - Utilize a tabela de dados para análises detalhadas
+        
+        ### Colunas Processadas
+        O sistema processa as seguintes informações:
+        - Número do Pedido de Compra
+        - Informações do Fornecedor
+        - Detalhes dos Materiais
+        - Valores e Quantidades
+        - Datas e Informações Adicionais
+        
+        ### Dúvidas Frequentes
+        1. **Tipos de arquivo aceitos?**
+           - Apenas arquivos Excel (.xlsx)
+        
+        2. **Limite de tamanho?**
+           - 200MB no total
+        
+        3. **Dados processados são salvos?**
+           - Não, os dados são processados apenas durante a sessão atual
+        """)
 
 if __name__ == "__main__":
     try:
