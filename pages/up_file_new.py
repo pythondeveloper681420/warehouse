@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
 import urllib.parse
 import numpy as np
 from datetime import datetime, time
+import time as time_module
+from contextlib import contextmanager
 
 # Configuração da página
 st.set_page_config(
@@ -36,11 +38,35 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Configuração do MongoDB
+# Configuração do MongoDB com retry
 USERNAME = urllib.parse.quote_plus('devpython86')
 PASSWORD = urllib.parse.quote_plus('dD@pjl06081420')
 CLUSTER = 'cluster0.akbb8.mongodb.net'
 DB_NAME = 'warehouse'
+MAX_RETRIES = 3
+RETRY_DELAY = 2
+
+@contextmanager
+def mongodb_connection():
+    """Context manager para conexão MongoDB com retry"""
+    client = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            connection_string = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/?retryWrites=true&w=majority&connectTimeoutMS=30000&socketTimeoutMS=30000"
+            client = MongoClient(connection_string, serverSelectionTimeoutMS=30000)
+            # Verifica a conexão
+            client.server_info()
+            yield client[DB_NAME]
+            break
+        except errors.ServerSelectionTimeoutError:
+            if attempt == MAX_RETRIES - 1:
+                raise
+            time_module.sleep(RETRY_DELAY)
+        except Exception as e:
+            raise
+        finally:
+            if client:
+                client.close()
 
 def handle_date(value):
     """Função para tratar datas e horários"""
@@ -72,86 +98,103 @@ def clean_dataframe(df):
     
     return df_clean
 
-def connect_mongodb():
-    """Conecta ao MongoDB"""
-    try:
-        connection_string = f"mongodb+srv://{USERNAME}:{PASSWORD}@{CLUSTER}/?retryWrites=true&w=majority"
-        client = MongoClient(connection_string)
-        client.server_info()
-        return client[DB_NAME]
-    except Exception as e:
-        st.error(f"Erro de conexão com MongoDB: {e}")
-        return None
-
 def upload_to_mongodb(df, collection_name):
-    """Faz upload do DataFrame para o MongoDB"""
-    db = connect_mongodb()
-    if db is not None:
-        try:
+    """Faz upload do DataFrame para o MongoDB com retry"""
+    try:
+        with mongodb_connection() as db:
             df_clean = clean_dataframe(df)
             records = df_clean.to_dict('records')
             collection = db[collection_name]
-            result = collection.insert_many(records)
-            return True, len(result.inserted_ids)
-        except Exception as e:
-            return False, f"Erro no upload: {e}"
-    return False, "Erro de conexão com MongoDB"
+            
+            # Upload em lotes para evitar timeout
+            batch_size = 1000
+            for i in range(0, len(records), batch_size):
+                batch = records[i:i + batch_size]
+                result = collection.insert_many(batch, ordered=False)
+            
+            return True, len(records)
+    except errors.ServerSelectionTimeoutError:
+        return False, "Erro de timeout na conexão com MongoDB. Por favor, tente novamente."
+    except Exception as e:
+        return False, f"Erro no upload: {str(e)}"
 
 def get_collection_fields(collection_name):
     """Retorna os campos disponíveis em uma collection"""
-    db = connect_mongodb()
-    if db is not None:
-        try:
+    try:
+        with mongodb_connection() as db:
             collection = db[collection_name]
             sample_doc = collection.find_one()
             if sample_doc:
                 return list(sample_doc.keys())
             return []
-        except Exception as e:
-            st.error(f"Erro ao obter campos: {e}")
-            return []
-    return []
+    except Exception as e:
+        st.error(f"Erro ao obter campos: {str(e)}")
+        return []
 
-def remove_duplicates(collection_name, field_name):
-    """Remove documentos duplicados baseados em um campo específico"""
-    db = connect_mongodb()
-    if db is not None:
-        try:
+def fast_remove_duplicates(collection_name, field_name):
+    """Remove duplicatas de forma rápida usando pandas"""
+    try:
+        with mongodb_connection() as db:
             collection = db[collection_name]
-            
-            # Conta total de documentos antes
             total_before = collection.count_documents({})
             
-            # Agrupa por campo e mantém apenas o primeiro documento de cada grupo
-            pipeline = [
-                {"$group": {
-                    "_id": f"${field_name}",
-                    "doc_id": {"$first": "$_id"},
-                    "count": {"$sum": 1}
-                }},
-                {"$match": {
-                    "count": {"$gt": 1}
-                }}
-            ]
+            # Converte collection para DataFrame em lotes
+            batch_size = 10000
+            df_list = []
+            for batch in collection.find().batch_size(batch_size):
+                df_list.append(pd.DataFrame([batch]))
             
-            duplicates = list(collection.aggregate(pipeline))
+            if not df_list:
+                return False, "Collection vazia", 0
+                
+            df = pd.concat(df_list, ignore_index=True)
             
-            # Remove todos os documentos exceto o primeiro de cada grupo
-            for dup in duplicates:
-                collection.delete_many({
-                    field_name: dup["_id"],
-                    "_id": {"$ne": dup["doc_id"]}
-                })
+            # Remove duplicatas mantendo o primeiro registro
+            df_clean = df.drop_duplicates(subset=field_name, keep='first')
+            removed_count = len(df) - len(df_clean)
             
-            # Conta total de documentos depois
+            if removed_count > 0:
+                # Limpa a collection e insere os dados limpos em lotes
+                collection.delete_many({})
+                clean_data = df_clean.to_dict('records')
+                
+                for i in range(0, len(clean_data), batch_size):
+                    batch = clean_data[i:i + batch_size]
+                    collection.insert_many(batch)
+                
+            return True, removed_count, len(df_clean)
+            
+    except Exception as e:
+        return False, str(e), 0
+
+def batch_remove_duplicates(collection_name, field_name, batch_size=1000):
+    """Remove duplicatas em lotes para coleções muito grandes"""
+    try:
+        with mongodb_connection() as db:
+            collection = db[collection_name]
+            total_before = collection.count_documents({})
+            
+            # Cria índice para o campo de agrupamento
+            collection.create_index(field_name)
+            
+            # Processa em lotes
+            unique_values = set()
+            duplicates_removed = 0
+            
+            cursor = collection.find().batch_size(batch_size)
+            for batch in cursor:
+                value = batch.get(field_name)
+                if value in unique_values:
+                    collection.delete_one({'_id': batch['_id']})
+                    duplicates_removed += 1
+                else:
+                    unique_values.add(value)
+            
             total_after = collection.count_documents({})
-            removed_count = total_before - total_after
-            
-            return True, removed_count, total_after
-            
-        except Exception as e:
-            return False, str(e), 0
-    return False, "Erro de conexão com MongoDB", 0
+            return True, duplicates_removed, total_after
+                
+    except Exception as e:
+        return False, str(e), 0
 
 def main():
     # Cabeçalho
@@ -255,9 +298,24 @@ def main():
                         help="Os documentos serão considerados duplicados se tiverem o mesmo valor neste campo"
                     )
                     
+                    # Opção para escolher o método de limpeza
+                    cleaning_method = st.radio(
+                        "Método de Limpeza",
+                        ["Rápido (Memória)", "Em Lotes (Menor uso de memória)"],
+                        help="Escolha o método baseado no tamanho da sua collection"
+                    )
+                    
                     if st.button("🧹 Remover Duplicatas", type="primary", use_container_width=True):
                         with st.spinner("Removendo duplicatas..."):
-                            success, removed_count, remaining_count = remove_duplicates(clean_collection, selected_field)
+                            if cleaning_method == "Rápido (Memória)":
+                                success, removed_count, remaining_count = fast_remove_duplicates(
+                                    clean_collection, selected_field
+                                )
+                            else:
+                                success, removed_count, remaining_count = batch_remove_duplicates(
+                                    clean_collection, selected_field
+                                )
+                                
                             if success:
                                 st.success(f"""
                                     ✅ Limpeza Concluída com Sucesso!
