@@ -272,7 +272,7 @@ def main():
         st.session_state.excel_data = None
         st.session_state.download_triggered = False
     
-    st.title("📊 Sistema de Processamento de Pedidos de Compra")
+    st.header("📊 Sistema de Processamento de Pedidos de Compra")
 
     st.markdown("---")
 
@@ -301,7 +301,6 @@ def main():
                 label="⚡ Espaço disponível",
                 value=f"{remaining_size:.1f}MB"
             )
-    
     if uploaded_files:
         if st.button("🚀 Iniciar Processamento", use_container_width=True):
             try:

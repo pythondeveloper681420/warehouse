@@ -67,7 +67,7 @@ lottie_json = load_lottieurl(lottie_url)
 
 # Main container
 with st.container():
-    st.title("🔄 Processador de Notas Fiscais XML")
+    st.header("🔄 Processador de Notas Fiscais XML")
     st.markdown("---")
 
 # # Sidebar for configuration
