@@ -517,7 +517,7 @@ def main():
             
             with col1:
                 total_invoices = len(df)
-                st.metric(label="Total de Notas Fiscais", value=total_invoices)
+                st.metric(label="Total de Linhas", value=total_invoices)
             
             with col2:
                 unique_issuers = df['emitNome'].nunique()

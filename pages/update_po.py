@@ -169,13 +169,14 @@ class DataProcessor:
                     
             # Select only the desired columns
             df_processed = df_processed[SELECTED_COLUMNS]        
-            
+                       
             return df_processed
-            
+        
+                         
         except Exception as e:
             logger.error(f"Error in process_dataframe: {str(e)}")
             raise
-
+             
 class FileHandler:
     """Class to handle file operations"""
     
@@ -273,9 +274,6 @@ def main():
         st.session_state.download_triggered = False
     
     st.header("📊 Sistema de Processamento de Pedidos de Compra")
-
-    st.markdown("---")
-
     #st.subheader("📁 Seleção de Arquivos")
     tab1, tab2, tab3 = st.tabs(["📤 Upload e Extração", "📊 Visualização de Dados", "❓ Como Utilizar"])
 
@@ -325,6 +323,9 @@ def main():
                         
                         if all_dfs:
                             df_final = pd.concat(all_dfs, ignore_index=True)
+                            
+                            df = df_final 
+                            
                             df_processed = DataProcessor.process_dataframe(df_final, progress_bar)
                             
                             st.session_state.processed_data = df_processed
@@ -365,7 +366,70 @@ def main():
                 st.rerun()
                 
     with tab2:
-       st.text("tab2")
+       if st.session_state.excel_data is not None:
+                 
+            df=df[['Purchasing Document',
+                'Item',
+                'Supplier',
+                'Vendor Name',
+                'Material',
+                'Material Description',
+                'Order Quantity',
+                'Order Unit',
+                'Control Code (NCM)',
+                'Project Code',
+                'Andritz WBS Element',
+                'Cost Center',
+                'Document Date', 
+                # 'PO Creation Date',
+                'PO Created by',
+                'Purchase Requisition',
+                # 'total_itens_po',
+                # 'valor_unitario_formatted', 
+                # 'total_valor_po_liquido_formatted', 
+                # 'total_valor_po_com_impostos_formatted',
+                # 'Order Quantity',
+                # 'total_itens_po',
+                # 'unique'
+                ]]
+            df['unique'] = (
+                df['Purchasing Document'].astype(str) + 
+                df['Item'].astype(str)
+            )
+            df = df.drop_duplicates(subset=['unique'])
+            #st.dataframe(df)
+            st.header("Visualização de Dados")
+                    # Key Metrics
+            col1, col2, col3 = st.columns(3)
+                    
+            with col1:
+                total_invoices = len(df)
+                st.metric(label="Total de Linhas", value=total_invoices)
+        
+            with col2:
+                 unique_issuers = df['Vendor Name'].nunique()
+                 st.metric(label="Número de Fornecedores", value=unique_issuers)
+        
+            with col3:
+                 unique_issuers = df['Purchasing Document'].nunique()
+                 st.metric(label="Número de PO'S", value=unique_issuers)
+            
+            # # Global Search Filter
+            # st.subheader("Filtrar Dados")
+            # search_term = st.text_input("Busca Global (filtra em todas as colunas)")
+        
+            # if search_term:
+            #     # Create a boolean mask that checks if the search term is in any column
+            #         mask = df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)
+            #         filtered_df = df[mask]
+            # else:
+            #         filtered_df = df
+            
+                # Display filtered DataFrame without index
+            st.dataframe(df, hide_index=True)  
+       else:
+            st.info("Faça o upload dos arquivos na aba 'Upload e Extração' para visualizar os dados.")
+           
     
     with tab3:
         st.subheader("📖 Guia de Utilização")
