@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # Main title
-st.title("XML Invoice Processor")
+st.header("📃 Processamento de Arquivos XML")
 
 def clean_description(description):
     """Remove múltiplos espaços consecutivos e espaços no início e no final da string."""
@@ -212,8 +212,6 @@ def main():
     tab1, tab2, tab3 = st.tabs(["📤 Upload e Extração", "📊 Visualização de Dados", "❓ Como Utilizar"])
 
     with tab1:
-        st.header("Processamento de Arquivos XML")
-        
         # File uploader for XML files
         uploaded_files = st.file_uploader(
             "Upload XML Files", 
@@ -327,7 +325,7 @@ def main():
             # Atualiza a coluna 'po' com o primeiro valor não vazio
             first_po_dict = get_first_non_empty_po(df)
             df['po'] = df['chaveNfe'].map(first_po_dict)
-    ##               
+                   
             # Remover linhas duplicadas com base na coluna 'unique'
             df.drop_duplicates(subset='unique', inplace=True)
 
@@ -581,3 +579,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center'>
+        <p>Desenvolvido com ❤️ | XML Processor Pro v1.0</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)      

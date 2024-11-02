@@ -273,7 +273,7 @@ def main():
         st.session_state.excel_data = None
         st.session_state.download_triggered = False
     
-    st.header("📊 Sistema de Processamento de Pedidos de Compra")
+    st.header("📑 Sistema de Processamento de Pedidos de Compra")
     #st.subheader("📁 Seleção de Arquivos")
     tab1, tab2, tab3 = st.tabs(["📤 Upload e Extração", "📊 Visualização de Dados", "❓ Como Utilizar"])
 
