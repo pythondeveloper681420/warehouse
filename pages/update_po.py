@@ -27,6 +27,7 @@ SELECTED_COLUMNS = [
     'Material',
     'Material Description',
     'Order Quantity',
+    'total_itens_po',
     'Order Unit',
     'Control Code (NCM)',
     'Project Code',
@@ -36,12 +37,24 @@ SELECTED_COLUMNS = [
     'PO Creation Date',
     'PO Created by',
     'Purchase Requisition',
-    'total_itens_po',
-    'valor_unitario_formatted', 
-    'total_valor_po_liquido_formatted', 
+    'PR Created by',
+    'Price unit',
+    'Gross Price',
+   
+    'valor_unitario',
+    'valor_item_com_impostos',
+    'Net order value',
+    'total_valor_po_liquido',
+    'total_valor_po_com_impostos',
+    
+    'valor_unitario_formatted',
+    'valor_item_com_impostos_formatted',
+    'Net order value_formatted',
+    'total_valor_po_liquido_formatted',
     'total_valor_po_com_impostos_formatted',
-    'Order Quantity',
-    'total_itens_po',
+     
+    'Purchasing Group',
+    'Plant',           
     'unique'
 ]
 
@@ -124,17 +137,17 @@ class DataProcessor:
                 
             df_processed = pd.concat(processed_chunks, ignore_index=True)
             
-            groupby_cols = ['Purchasing Document']
-            df_processed['total_valor_po_liquido'] = df_processed.groupby(groupby_cols)['Net order value'].transform('sum')
-            df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
-            df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Order Quantity'].transform('sum')
-            
             df_processed['unique'] = (
                 df_processed['Purchasing Document'].astype(str) + 
                 df_processed['Item'].astype(str)
             )
             df_processed = df_processed.drop_duplicates(subset=['unique'])
             
+            groupby_cols = ['Purchasing Document']
+            df_processed['total_valor_po_liquido'] = df_processed.groupby(groupby_cols)['Net order value'].transform('sum')
+            df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
+            df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Order Quantity'].transform('sum')
+                        
             df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
             df_processed = df_processed.dropna(subset=['Purchasing Document'])
             df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
