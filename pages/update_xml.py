@@ -8,6 +8,7 @@ import time
 import pickle
 import numpy as np
 import io
+import unicodedata
 #format_date_to_brazilian
 #df['Mês']
 # Page configuration
@@ -20,6 +21,33 @@ st.set_page_config(
 
 # Main title
 st.header("📃 Processamento de Arquivos XML")
+
+def slugify(text):
+    """
+    Convert a text string into a slug format.
+    - Convert to lowercase
+    - Remove special characters
+    - Replace spaces with hyphens
+    - Remove consecutive hyphens
+    """
+    if not isinstance(text, str):
+        text = str(text)
+    
+    # Convert to lowercase and normalize unicode characters
+    text = text.lower()
+    text = unicodedata.normalize('NFKD', text)
+    text = text.encode('ascii', 'ignore').decode('utf-8')
+    
+    # Replace any non-alphanumeric character with a hyphen
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    
+    # Remove leading and trailing hyphens
+    text = text.strip('-')
+    
+    # Replace multiple consecutive hyphens with a single hyphen
+    text = re.sub(r'-+', '-', text)
+    
+    return text
 
 def clean_description(description):
     """Remove múltiplos espaços consecutivos e espaços no início e no final da string."""
@@ -255,8 +283,12 @@ def main():
             ]
 
             df = df.reindex(columns=colunas)
+
+            # Create unique identifier using slugify
+            df['unique'] = df['NFe'].astype(str) + '-' + df['Item Nota'].astype(str) + '-' + df['Descrição'].astype(str)
+            df['unique'] = df['unique'].apply(slugify)
             
-            df['unique'] = df['NFe'] + df['Item Nota'].astype(str) + df['Descrição']
+            # Remove duplicates based on the slugified unique column
             df.drop_duplicates(subset='unique', inplace=True)
             
             # df=df_formatted
@@ -301,9 +333,6 @@ def main():
             # Agrupando por 'Category' e somando os valores de 'Value'
             df['vlNf'] = df.groupby('chaveNfe')['vlTotProd'].transform('sum')
 
-            # Adicionando coluna 'unique' 
-
-            
             df['Descrição'] = df['Descrição'].apply(clean_description).str.upper()
             
             # Aplicar a função para filtrar e formatar a coluna 'info_adic'
@@ -328,13 +357,7 @@ def main():
 
             # Atualiza a coluna 'po' com o primeiro valor não vazio
             first_po_dict = get_first_non_empty_po(df)
-            df['po'] = df['chaveNfe'].map(first_po_dict)
-                   
-            # Remover linhas duplicadas com base na coluna 'unique'
-            #df.drop_duplicates(subset='unique', inplace=True)
-
-            # Remover a coluna 'unique'
-            #df = df.drop(columns=['unique'], axis=1)
+            df['po'] = df['chaveNfe'].map(first_po_dict)                   
               
             def format_date_to_brazilian(df, columns):
                 """
@@ -448,37 +471,206 @@ def main():
             df['destCnpj'] = df['destCnpj'].str.zfill(14)
             
             st.write(f"Quantidade de linhas: {df.shape[0]}")
+                       
+            # Create a new column counting invoices per PO
+            po_invoice_counts = df.groupby('po')['chNfe'].nunique().reset_index()
+            po_invoice_counts.columns = ['po', 'total_invoices_per_po']
+            df = df.merge(po_invoice_counts, on='po', how='left')
             
-            # Remover duplicatas com base em 'col1' e 'col2'
-            df_unique = df.drop_duplicates(subset=['chNfe', 'po'])
+            def categorize_transaction(row):
+                """
+                Categorize transactions based on CFOP and whether Andritz is the emitter
+                Includes categories for maintenance, repairs, and returns
+                """
+                cfop = str(row['cfop'])
+                emit_nome = str(row['emitNome']).upper()
+                
+                # Check if Andritz is the emitter
+                is_andritz_emitter = 'ANDRITZ' in emit_nome
+                
+                # Manutenção, Conserto e Reparo CFOPs
+                manutencao_entrada_cfops = ['1915', '2915', '1916', '2916']  # Entrada para reparo
+                manutencao_saida_cfops = ['5915', '6915', '5916', '6916']    # Saída para reparo
+                
+                # Retorno de mercadoria CFOPs
+                retorno_entrada_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
+                                        '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504']
+                retorno_saida_cfops = ['5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', '5504',
+                                    '6201', '6202', '6210', '6410', '6411', '6412', '6413', '6503', '6504']
+                
+                # Remessa CFOPs
+                remessa_entrada_cfops = ['1554','1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', '1913', '1914', '1921',
+                                        '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909', '2913', '2914', '2921']
+                remessa_saida_cfops = ['5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909', '5913', '5914', '5921',
+                                    '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909', '6913', '6914', '6921']
+                
+                # Devolução CFOPs
+                devolucao_entrada_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', '1504', '1921',
+                                        '2201', '2202', '2203', '2204', '2209', '2410', '2411', '2503', '2504', '2921']
+                devolucao_saida_cfops = ['5201', '5202', '5203', '5204', '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
+                                        '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', '6413', '6503', '6504', '6921']
+
+                # Industrialização CFOPs
+                industrializacao_entrada_cfops = ['1124', '1125', '1126', '2124', '2125', '2126']
+                industrializacao_saida_cfops = ['5124', '5125', '5126', '6124', '6125', '6126']
+
+                # Categorization logic
+                if cfop in manutencao_entrada_cfops or cfop in manutencao_saida_cfops:
+                    return "Manutenção/Conserto/Reparo"
+                
+                elif cfop in retorno_entrada_cfops or cfop in retorno_saida_cfops:
+                    return "Retorno de Mercadoria"
+                
+                elif cfop in remessa_entrada_cfops or cfop in remessa_saida_cfops:
+                    return "Remessa"
+                
+                elif cfop in devolucao_entrada_cfops or cfop in devolucao_saida_cfops:
+                    return "Devolução"
+                    
+                elif cfop in industrializacao_entrada_cfops or cfop in industrializacao_saida_cfops:
+                    return "Industrialização"
+                
+                elif cfop.startswith('3') or cfop.startswith('7'):
+                    return "Importação/Exportação"
+                    
+                elif cfop.startswith('1') or cfop.startswith('2'):  # Entrada
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais"
+                    else:
+                        return "Compra de Terceiros"
+                        
+                elif cfop.startswith('5') or cfop.startswith('6'):  # Saída
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais"
+                    else:
+                        return "Venda para Terceiros"
+                        
+                return "Outros"  # Default category
+
+            # Add this code after the existing DataFrame transformations but before the final column selection
+            df['categoria'] = df.apply(categorize_transaction, axis=1)
             
-            df_po = df_unique.groupby(['chNfe', 'po']).agg(
-                vlRecPo=('vlTotalNf', 'sum'),
-                qtdNfPo=('vlTotalNf', 'count')
-            ).reset_index()
-            
-            #df_po=df_po['po','vlRecPo','qtdNfPo']
-            df_merged = df.merge(df_po, on='po', how='left')
- 
-            df_merged =df_merged.rename(columns={'chNfe_x':'chNfe'})
+            def categorize(row):
+                """
+                Categorize transactions based on CFOP and whether Andritz is the emitter
+                Includes categories for maintenance, repairs, and returns
+                """
+                cfop = str(row['cfop'])
+                emit_nome = str(row['emitNome']).upper()
+                
+                # Check if Andritz is the emitter
+                is_andritz_emitter = 'ANDRITZ' in emit_nome
+                
+                # Manutenção, Conserto e Reparo CFOPs
+                manutencao_entrada_cfops = ['1915', '2915', '1916', '2916']  # Entrada para reparo
+                manutencao_saida_cfops = ['5915', '6915', '5916', '6916']    # Saída para reparo
+                
+                # Retorno de mercadoria CFOPs
+                retorno_entrada_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
+                                        '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504']
+                retorno_saida_cfops = ['5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', '5504',
+                                    '6201', '6202', '6210', '6410', '6411', '6412', '6413', '6503', '6504']
+                
+                # Remessa CFOPs
+                remessa_entrada_cfops = ['1554','1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', '1913', '1914', '1921',
+                                        '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909', '2913', '2914', '2921']
+                remessa_saida_cfops = ['5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909', '5913', '5914', '5921',
+                                    '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909', '6913', '6914', '6921']
+                
+                # Devolução CFOPs
+                devolucao_entrada_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', '1504', '1921',
+                                        '2201', '2202', '2203', '2204', '2209', '2410', '2411', '2503', '2504', '2921']
+                devolucao_saida_cfops = ['5201', '5202', '5203', '5204', '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
+                                        '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', '6413', '6503', '6504', '6921']
+
+                # Industrialização CFOPs
+                industrializacao_entrada_cfops = ['1124', '1125', '1126', '2124', '2125', '2126']
+                industrializacao_saida_cfops = ['5124', '5125', '5126', '6124', '6125', '6126']
+                
+                venda=['5101','5102','5401','5403','5405','5551','5653','5656','6101','6102','6107','6108','6401','6403','6404','5923','6653','6923']
+                transf_filiais_retorno=['1949','2554','2908','2949']
+                transf_filiais_envio=['6949','5554','6554','6555']
+                manutencao_envio=['5915','5901','6915']
+                
+
+
+
+                # Categorization logic
+                # if cfop in manutencao_entrada_cfops or cfop in manutencao_saida_cfops:
+                #     return "Manutenção/Conserto/Reparo"
+                
+                # elif cfop in retorno_entrada_cfops or cfop in retorno_saida_cfops:
+                #     return "Retorno de Mercadoria"
+                
+                # elif cfop in remessa_entrada_cfops or cfop in remessa_saida_cfops:
+                #     return "Remessa"
+                
+                # elif cfop in devolucao_entrada_cfops or cfop in devolucao_saida_cfops:
+                #     return "Devolução"
+                    
+                # elif cfop in industrializacao_entrada_cfops or cfop in industrializacao_saida_cfops:
+                #     return "Industrialização"
+                
+                # elif cfop.startswith('3') or cfop.startswith('7'):
+                #     return "Importação/Exportação"
+                    
+                # elif cfop.startswith('1') or cfop.startswith('2'):  # Entrada
+                #     if is_andritz_emitter:
+                #         return "Transferência Entre Filiais"
+                #     else:
+                #         return "Compra de Terceiros"
+                        
+                # elif cfop.startswith('5') or cfop.startswith('6'):  # Saída
+                #     if is_andritz_emitter:
+                #         return "Transferência Entre Filiais"
+                #     else:
+                #         return "Venda para Terceiros"
+                if cfop in manutencao_envio:  # Saída
+                    if is_andritz_emitter:
+                        return "Manutenção/Conserto/Reparo - Envio"
+                    else:
+                        return "Manutenção/Conserto/Reparo - Retorno"
+                    
+                elif cfop in venda:  # Saída
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais - venda"
+                    else:
+                        return "Venda de Terceiros"
+                    
+                elif cfop in transf_filiais_retorno:  # Saída
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais - Retorno"
+                    else:
+                        return "Manutenção/Conserto/Reparo - Retorno" 
+                    
+                elif cfop in transf_filiais_envio:  # Saída
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais - Envio"
+                    else:
+                        return "Manutenção/Conserto/Reparo - Envio"  
+                                
+                return "Outros"  # Default category
+
+            # Add this code after the existing DataFrame transformations but before the final column selection
+            df['my_categoria'] = df.apply(categorize, axis=1)
+
+                       
                             # Exibir apenas as colunas renomeadas
-            colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','vlRecPo','qtdNfPo','dVenc','chNfe',
+            colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
                                     'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
                                     'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                    'cfop']
+                                    'cfop','total_invoices_per_po', 'categoria','my_categoria','unique']
             
-            df_merged= df_merged[colunas_renomeadas]
-            
-            df_merged['unique'] = df_merged['nNf'].astype(str) + df_merged['itemNf'].astype(str) + df_merged['nomeMaterial']
-                            # Remover linhas duplicadas com base na coluna 'unique'
-            df_merged.drop_duplicates(subset='unique', inplace=True)
+            df= df[colunas_renomeadas]
 
-            # Remover a coluna 'unique'
-            #df_merged = df_merged.drop(columns=['unique'], axis=1)
+            groupby_cols_nf = ['chNfe']
+            df['total_itens_nf'] = df.groupby(groupby_cols_nf )['qtd'].transform('sum')
             
-            df=df_merged
+            groupby_cols_po = ['po']
+            df['total_itens_po'] = df.groupby(groupby_cols_po )['qtd'].transform('sum')
+            df['valor_recebido_po'] = df.groupby(groupby_cols_po )['vlTotProd'].transform('sum')
+                        
             df = df.sort_values(by=['dtEmi','nNf','itemNf'], ascending=[False,True,True])
-            #df = df.sort_values(by=,'nNf','itemNf'], ascending=[False,True,True])  
 
             # Download buttons
             def convert_df_to_excel(df):
