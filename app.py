@@ -152,13 +152,11 @@ class EmailManager:
                 <p>Para validar sua conta no Sistema Warehouse, clique no link abaixo:</p>
                 <p>
                     <a href="{validation_url}" 
-                       style="background-color: #4CAF50; color: white; padding: 10px 20px; 
+                       style="background-color: #0075be; color: white; padding: 10px 20px; 
                               text-decoration: none; border-radius: 5px;">
                         Validar Conta
                     </a>
                 </p>
-                <p>Ou copie e cole este link no seu navegador:</p>
-                <p>{validation_url}</p>
                 <p>Este link expira em 24 horas.</p>
                 <p>Se você não solicitou esta validação, ignore este email.</p>
             </div>
@@ -282,7 +280,8 @@ class WarehouseApp:
 
     def show_sidebar(self):
         with st.sidebar:
-            st.title(f"Bem-vindo, {st.session_state.user['initials']}")
+            st.title(f"Bem-vindo")
+            st.header(f"{st.session_state.user['initials']}")
             if st.button("Sair"):
                 st.session_state.logged_in = False
                 st.session_state.user = None
