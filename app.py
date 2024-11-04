@@ -9,6 +9,8 @@ import re
 from dotenv import load_dotenv
 import os
 
+st.set_page_config(initial_sidebar_state="collapsed")
+
 class Config:
     def get_brevo_api():
         try:
@@ -35,8 +37,6 @@ class Config:
     TOKEN_EXPIRY_HOURS = 24 * 7  # 7 dias
     MIN_PASSWORD_LENGTH = 6
     ALLOWED_EMAIL_DOMAIN = "@andritz.com"
-
-st.set_page_config(initial_sidebar_state="collapsed")
 
 class MongoDBManager:
     def __init__(self):
@@ -299,7 +299,11 @@ class WarehouseApp:
         if 'user' in st.session_state:
             with st.sidebar:
                 st.title(f"Bem-vindo")
-                st.header(f"{st.session_state.user['initials']}")
+                
+                # Exibe as iniciais do usuário em uma bola
+                initials = st.session_state.user['initials']
+                st.markdown(f"<div style='background-color:#0075be;color:white;border-radius:50%;width:40px;height:40px;display:flex;justify-content:center;align-items:center;font-size:18px;font-weight:bold;'>{initials}</div>", unsafe_allow_html=True)
+                
                 if st.button("Sair"):
                     self.user_manager.logout()
                     st.rerun()
