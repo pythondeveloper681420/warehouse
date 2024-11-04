@@ -183,10 +183,8 @@ class UserManager:
             st.error("Email já cadastrado")
             return False
 
-        # Gera token de validação
         token = secrets.token_urlsafe(32)
         
-        # Cria usuário
         user_data = {
             "name": name,
             "email": email,
@@ -196,7 +194,6 @@ class UserManager:
             "created_at": datetime.utcnow()
         }
         
-        # Salva usuário e token
         if self.db.create_user(user_data):
             token_data = {
                 "token": token,
@@ -217,14 +214,12 @@ class UserManager:
             st.error("Token inválido ou expirado")
             return False
 
-        # Verifica expiração
         expiry_time = token_doc['created_at'] + timedelta(hours=Config.TOKEN_EXPIRY_HOURS)
         if datetime.utcnow() > expiry_time:
             self.db.delete_token(token)
             st.error("Token expirado. Faça o cadastro novamente.")
             return False
 
-        # Atualiza usuário e remove token
         if self.db.update_user(token_doc['email'], {"verified": True}):
             self.db.delete_token(token)
             st.success("Conta validada com sucesso! Você já pode fazer login.")
@@ -249,7 +244,6 @@ class UserManager:
             st.error("Email ou senha incorretos")
             return False
 
-        # Gera um novo token de autenticação
         token = secrets.token_urlsafe(32)
         token_data = {
             "token": token,
@@ -281,7 +275,6 @@ class UserManager:
             token = st.session_state.auth_token
             token_doc = self.db.find_token(token)
             if token_doc:
-                # Verifica expiração
                 expiry_time = token_doc['created_at'] + timedelta(hours=Config.TOKEN_EXPIRY_HOURS)
                 if datetime.utcnow() <= expiry_time:
                     user = self.db.find_user(token_doc['email'])
@@ -303,12 +296,13 @@ class WarehouseApp:
         self.user_manager.check_login()
 
     def show_sidebar(self):
-        with st.sidebar:
-            st.title(f"Bem-vindo")
-            st.header(f"{st.session_state.user['initiais']}")
-            if st.button("Sair"):
-                self.user_manager.logout()
-                st.rerun()
+        if 'user' in st.session_state:
+            with st.sidebar:
+                st.title(f"Bem-vindo")
+                st.header(f"{st.session_state.user['initials']}")
+                if st.button("Sair"):
+                    self.user_manager.logout()
+                    st.rerun()
 
     def login_page(self):
         st.markdown("""
