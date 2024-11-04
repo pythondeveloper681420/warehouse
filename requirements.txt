@@ -37,11 +37,9 @@ Pygments==2.18.0
 pymongo==4.10.1
 pypdfium2==4.30.0
 python-dateutil==2.9.0.post0
-python-dotenv==1.0.1
 pytz==2024.2
 referencing==0.35.1
 requests==2.32.3
-resend==2.4.0
 rich==13.9.3
 rpds-py==0.20.0
 six==1.16.0
