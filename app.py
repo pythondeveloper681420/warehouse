@@ -1,3 +1,6 @@
+#pip freeze > requirements.txt
+#python -m venv .venv
+#.venv\Scripts\activate.bat
 import streamlit as st
 import pymongo
 import urllib.parse
@@ -9,7 +12,30 @@ import re
 from dotenv import load_dotenv
 import os
 
-st.set_page_config(initial_sidebar_state="collapsed")
+# Configuração da página
+st.set_page_config(
+    page_title="Warehouse App",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+hide_streamlit_style = """
+<style>
+.main {
+    overflow: auto;
+}
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+.stApp [data-testid="stToolbar"]{
+display:none;
+.reportview-container {
+    margin-top: -2em;
+}
+.stDeployButton {display:none;}
+#stDecoration {display:none;}    
+</style>
+"""
 
 class Config:
     def get_brevo_api():
@@ -136,17 +162,43 @@ class EmailManager:
         return f"""
         <!DOCTYPE html>
         <html>
-        <body style="font-family: Arial, sans-serif; margin: 0; padding: 20px;">
-            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 20px;">
+        <head>
+            <style>
+                /* Global styles */
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                }}
+                .container {{
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background-color: #ffffff;
+                    padding: 20px;
+                }}
+
+                /* Button styles */
+                .button {{
+                    display: inline-block;
+                    background-color: #0075be;
+                    color: white;
+                    text-decoration: none;
+                    padding: 12px 24px;
+                    border-radius: 4px;
+                    transition: background-color 0.3s ease;
+                }}
+                .button:hover {{
+                    background-color: #0056b3;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
                 <h1>Sistema Warehouse - Validação de Conta</h1>
                 <p>Olá {name},</p>
                 <p>Para validar sua conta no Sistema Warehouse, clique no link abaixo:</p>
                 <p>
-                    <a href="{validation_url}" 
-                       style="background-color: #0075be; color: white; padding: 0px 20px; 
-                              text-decoration: none; border-radius: 5px;">
-                        Validar Conta
-                    </a>
+                    <a href="{validation_url}" class="button">Validar Conta</a>
                 </p>
                 <p>Este link expira em 7 dias.</p>
                 <p>Se você não solicitou esta validação, ignore este email.</p>
@@ -298,15 +350,21 @@ class WarehouseApp:
     def show_sidebar(self):
         if 'user' in st.session_state:
             with st.sidebar:
-                st.title(f"Bem-vindo")
+                # Centralizar o título "Bem-vindo"
+                st.markdown(f"<div style='display:flex;justify-content:center;'><h1>Bem-vindo</h1></div>", unsafe_allow_html=True)
                 
-                # Exibe as iniciais do usuário em uma bola
-                initials = st.session_state.user['initials']
-                st.markdown(f"<div style='background-color:#0075be;color:white;border-radius:50%;width:40px;height:40px;display:flex;justify-content:center;align-items:center;font-size:18px;font-weight:bold;'>{initials}</div>", unsafe_allow_html=True)
+                # Centralizar a exibição das iniciais do usuário
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
+                    initials = st.session_state.user['initials']
+                    st.markdown(f"<div style='display:flex;justify-content:center;background-color:#0075be;color:white;border-radius:50%;width:40px;height:40px;align-items:center;font-size:18px;font-weight:bold;margin-bottom: 2rem'>{initials}</div>", unsafe_allow_html=True)
                 
-                if st.button("Sair"):
-                    self.user_manager.logout()
-                    st.rerun()
+                # Centralizar o botão "Sair"
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
+                    if st.button("Sair"):
+                        self.user_manager.logout()
+                        st.rerun()
 
     def login_page(self):
         st.markdown("""
@@ -347,11 +405,41 @@ class WarehouseApp:
                     self.user_manager.create_user(name, email, password, phone)
 
     def main_page(self):
-        self.show_sidebar()
+        # Criando o container principal com duas colunas
+        col1, col2 = st.columns([3,1], gap="large",vertical_alignment="bottom")
         
-        st.title("Dashboard")
-        st.write("Bem-vindo ao Sistema Warehouse!")
-
+        with col1:
+            st.title("Dashboard")
+            #st.write("Bem-vindo ao Sistema Warehouse!")
+        
+        with col2:
+            # Container para o avatar com estilo atualizado
+            with st.container():
+                initials = st.session_state.user['initials']
+                st.markdown(
+                    f"""
+                    <div style='
+                        display: flex;
+                        justify-content: flex-end;
+                        padding-right: 10px;
+                    '>
+                        <div style='
+                            display: flex;
+                            justify-content: center;
+                            background-color: #0075be;
+                            color: white;
+                            border-radius: 50%;
+                            width: 40px;
+                            height: 40px;
+                            align-items: center;
+                            font-size: 18px;
+                            font-weight: bold;
+                        '>{initials}</div>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+        
     def run(self):
         st.markdown("""
             <style>
