@@ -1,6 +1,3 @@
-#pip freeze > requirements.txt
-#python -m venv .venv
-#.venv\Scripts\activate.bat
 import streamlit as st
 import pymongo
 import urllib.parse
@@ -14,17 +11,13 @@ import os
 
 class Config:
     def get_brevo_api():
-        # Tenta primeiro pelo st.secrets (produção)
         try:
             return st.secrets["BREVO_API_KEY"]
         except:
-            # Se não achar, tenta pelo .env (desenvolvimento)
             load_dotenv()
             return os.getenv("BREVO_API_KEY")
 
-    # Usando a função
     BREVO_API_KEY = get_brevo_api()
-
     if not BREVO_API_KEY:
         st.error("BREVO_API_KEY não encontrada! Verifique suas configurações.")
         
@@ -33,18 +26,16 @@ class Config:
     MONGO_CLUSTER = 'cluster0.akbb8.mongodb.net'
     MONGO_DB = 'warehouse'
       
-    #BREVO_API_KEY = st.secrets["BREVO_API_KEY"]
     SENDER_NAME = "Sistema Warehouse"
     SENDER_EMAIL = "pythondeveloper681420@gmail.com"
     
     DEV_URL = "http://localhost:8501"
     PROD_URL = "https://warehouse-app.streamlit.app/"
     
-    TOKEN_EXPIRY_HOURS = 24
+    TOKEN_EXPIRY_HOURS = 24 * 7  # 7 dias
     MIN_PASSWORD_LENGTH = 6
     ALLOWED_EMAIL_DOMAIN = "@andritz.com"
 
-# Remove a sidebar padrão do Streamlit globalmente
 st.set_page_config(initial_sidebar_state="collapsed")
 
 class MongoDBManager:
@@ -113,7 +104,7 @@ class EmailManager:
     def send_validation_email(self, email, token, name):
         try:
             base_url = Config.PROD_URL if st.session_state.get('dev_mode', True) else Config.PROD_URL
-            validation_url = f"{base_url}?token={token}"  # Removido a barra após o domínio
+            validation_url = f"{base_url}?token={token}"
             
             payload = {
                 "sender": {
@@ -152,12 +143,12 @@ class EmailManager:
                 <p>Para validar sua conta no Sistema Warehouse, clique no link abaixo:</p>
                 <p>
                     <a href="{validation_url}" 
-                       style="background-color: #0075be; color: white; padding: 10px 20px; 
+                       style="background-color: #0075be; color: white; padding: 0px 20px; 
                               text-decoration: none; border-radius: 5px;">
                         Validar Conta
                     </a>
                 </p>
-                <p>Este link expira em 24 horas.</p>
+                <p>Este link expira em 7 dias.</p>
                 <p>Se você não solicitou esta validação, ignore este email.</p>
             </div>
         </body>
@@ -213,7 +204,6 @@ class UserManager:
                 "created_at": datetime.utcnow()
             }
             if self.db.create_token(token_data):
-                # Envia email de validação
                 if self.email.send_validation_email(email, token, name):
                     st.success("Cadastro realizado! Verifique seu email para validar a conta.")
                     return True
@@ -259,13 +249,50 @@ class UserManager:
             st.error("Email ou senha incorretos")
             return False
 
-        st.session_state.user = {
-            'name': user['name'],
-            'email': user['email'],
-            'initials': self.get_initials(user['name'])
+        # Gera um novo token de autenticação
+        token = secrets.token_urlsafe(32)
+        token_data = {
+            "token": token,
+            "email": email,
+            "created_at": datetime.utcnow()
         }
-        st.session_state.logged_in = True
-        return True
+        if self.db.create_token(token_data):
+            st.session_state.auth_token = token
+            st.session_state.user = {
+                'name': user['name'],
+                'email': user['email'],
+                'initials': self.get_initials(user['name'])
+            }
+            st.session_state.logged_in = True
+            return True
+
+        st.error("Erro ao realizar login. Tente novamente.")
+        return False
+
+    def logout(self):
+        if 'auth_token' in st.session_state:
+            token = st.session_state.pop('auth_token')
+            self.db.delete_token(token)
+        st.session_state.logged_in = False
+        st.session_state.user = None
+
+    def check_login(self):
+        if 'auth_token' in st.session_state:
+            token = st.session_state.auth_token
+            token_doc = self.db.find_token(token)
+            if token_doc:
+                # Verifica expiração
+                expiry_time = token_doc['created_at'] + timedelta(hours=Config.TOKEN_EXPIRY_HOURS)
+                if datetime.utcnow() <= expiry_time:
+                    user = self.db.find_user(token_doc['email'])
+                    st.session_state.user = {
+                        'name': user['name'],
+                        'email': user['email'],
+                        'initials': self.get_initials(user['name'])
+                    }
+                    st.session_state.logged_in = True
+                    return
+        self.logout()
 
 class WarehouseApp:
     def __init__(self):
@@ -273,18 +300,14 @@ class WarehouseApp:
         self.email_manager = EmailManager()
         self.user_manager = UserManager(self.db_manager, self.email_manager)
 
-        # Inicializa o estado da sessão
-        if 'logged_in' not in st.session_state:
-            st.session_state.logged_in = False
-            st.session_state.user = None
+        self.user_manager.check_login()
 
     def show_sidebar(self):
         with st.sidebar:
             st.title(f"Bem-vindo")
-            st.header(f"{st.session_state.user['initials']}")
+            st.header(f"{st.session_state.user['initiais']}")
             if st.button("Sair"):
-                st.session_state.logged_in = False
-                st.session_state.user = None
+                self.user_manager.logout()
                 st.rerun()
 
     def login_page(self):
@@ -300,15 +323,12 @@ class WarehouseApp:
         
         st.title("Sistema Warehouse")
         
-        # Verifica token de validação
         token = st.query_params.get("token")
         if token:
             self.user_manager.validate_token(token)
-            # Limpa o token da URL após a validação
             st.query_params.clear()
             st.rerun()
         
-        # Tabs de login e cadastro
         tab1, tab2 = st.tabs(["Login", "Cadastro"])
         
         with tab1:
@@ -329,24 +349,20 @@ class WarehouseApp:
                     self.user_manager.create_user(name, email, password, phone)
 
     def main_page(self):
-        # Mostra a sidebar apenas quando logado
         self.show_sidebar()
         
-        # Conteúdo principal após login
         st.title("Dashboard")
         st.write("Bem-vindo ao Sistema Warehouse!")
 
     def run(self):
-        # Esconde a sidebar padrão do Streamlit
         st.markdown("""
             <style>
                 [data-testid="collapsedControl"] {
                     display: none
                 }
-                
             </style>
         """, unsafe_allow_html=True)
-        # Roteamento básico
+        
         if not st.session_state.logged_in:
             self.login_page()
         else:
