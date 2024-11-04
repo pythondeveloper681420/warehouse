@@ -38,7 +38,7 @@ class Config:
     SENDER_EMAIL = "pythondeveloper681420@gmail.com"
     
     DEV_URL = "http://localhost:8501"
-    PROD_URL = "https://warehouse-app-python.streamlit.app/"
+    PROD_URL = "https://warehouse-app.streamlit.app/"
     
     TOKEN_EXPIRY_HOURS = 24
     MIN_PASSWORD_LENGTH = 6
