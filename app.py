@@ -112,7 +112,7 @@ class EmailManager:
     
     def send_validation_email(self, email, token, name):
         try:
-            base_url = Config.DEV_URL if st.session_state.get('dev_mode', True) else Config.PROD_URL
+            base_url = Config.PROD_URL if st.session_state.get('dev_mode', True) else Config.PROD_URL
             validation_url = f"{base_url}?token={token}"  # Removido a barra após o domínio
             
             payload = {
