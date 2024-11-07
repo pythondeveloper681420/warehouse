@@ -685,6 +685,110 @@ def main():
 
             # Aplicar a função de categorização
             df['my_categoria'] = df.apply(categorize, axis=1)
+            
+            # def categorize(row):
+            #     """
+            #     Categorize transactions based on CFOP and whether Andritz is the emitter
+            #     Includes categories for maintenance, repairs, and returns
+            #     """
+            #     cfop = str(row['cfop'])
+            #     emit_nome = str(row['emitNome']).upper()
+                
+            #     # Check if Andritz is the emitter
+            #     is_andritz_emitter = 'ANDRITZ' in emit_nome
+                
+            #     # Manutenção, Conserto e Reparo CFOPs
+            #     manutencao_entrada_cfops = ['1915', '2915', '1916', '2916']  # Entrada para reparo
+            #     manutencao_saida_cfops = ['5915', '6915', '5916', '6916']    # Saída para reparo
+                
+            #     # Retorno de mercadoria CFOPs
+            #     retorno_entrada_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
+            #                             '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504']
+            #     retorno_saida_cfops = ['5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', '5504',
+            #                         '6201', '6202', '6210', '6410', '6411', '6412', '6413', '6503', '6504']
+                
+            #     # Remessa CFOPs
+            #     remessa_entrada_cfops = ['1554','1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', '1913', '1914', '1921',
+            #                             '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909', '2913', '2914', '2921']
+            #     remessa_saida_cfops = ['5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909', '5913', '5914', '5921',
+            #                         '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909', '6913', '6914', '6921']
+                
+            #     # Devolução CFOPs
+            #     devolucao_entrada_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', '1504', '1921',
+            #                             '2201', '2202', '2203', '2204', '2209', '2410', '2411', '2503', '2504', '2921']
+            #     devolucao_saida_cfops = ['5201', '5202', '5203', '5204', '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
+            #                             '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', '6413', '6503', '6504', '6921']
+
+            #     # Industrialização CFOPs
+            #     industrializacao_entrada_cfops = ['1124', '1125', '1126', '2124', '2125', '2126']
+            #     industrializacao_saida_cfops = ['5124', '5125', '5126', '6124', '6125', '6126']
+                
+            #     venda=['5101','5102','5401','5403','5405','5551','5653','5656','6101','6102','6107','6108','6401','6403','6404','5923','6653','6923']
+            #     transf_filiais_retorno=['1949','2554','2908','2949']
+            #     transf_filiais_envio=['6949','5554','6554','6555']
+            #     manutencao_envio=['5915','5901','6915']
+                
+
+
+
+            #     # Categorization logic
+            #     # if cfop in manutencao_entrada_cfops or cfop in manutencao_saida_cfops:
+            #     #     return "Manutenção/Conserto/Reparo"
+                
+            #     # elif cfop in retorno_entrada_cfops or cfop in retorno_saida_cfops:
+            #     #     return "Retorno de Mercadoria"
+                
+            #     # elif cfop in remessa_entrada_cfops or cfop in remessa_saida_cfops:
+            #     #     return "Remessa"
+                
+            #     # elif cfop in devolucao_entrada_cfops or cfop in devolucao_saida_cfops:
+            #     #     return "Devolução"
+                    
+            #     # elif cfop in industrializacao_entrada_cfops or cfop in industrializacao_saida_cfops:
+            #     #     return "Industrialização"
+                
+            #     # elif cfop.startswith('3') or cfop.startswith('7'):
+            #     #     return "Importação/Exportação"
+                    
+            #     # elif cfop.startswith('1') or cfop.startswith('2'):  # Entrada
+            #     #     if is_andritz_emitter:
+            #     #         return "Transferência Entre Filiais"
+            #     #     else:
+            #     #         return "Compra de Terceiros"
+                        
+            #     # elif cfop.startswith('5') or cfop.startswith('6'):  # Saída
+            #     #     if is_andritz_emitter:
+            #     #         return "Transferência Entre Filiais"
+            #     #     else:
+            #     #         return "Venda para Terceiros"
+            #     if cfop in manutencao_envio:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Manutenção/Conserto/Reparo - Envio"
+            #         else:
+            #             return "Manutenção/Conserto/Reparo - Retorno"
+                    
+            #     elif cfop in venda:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Transferência Entre Filiais - venda"
+            #         else:
+            #             return "Venda de Terceiros"
+                    
+            #     elif cfop in transf_filiais_retorno:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Transferência Entre Filiais - Retorno"
+            #         else:
+            #             return "Manutenção/Conserto/Reparo - Retorno" 
+                    
+            #     elif cfop in transf_filiais_envio:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Transferência Entre Filiais - Envio"
+            #         else:
+            #             return "Manutenção/Conserto/Reparo - Envio"  
+                                
+            #     return "Outros"  # Default category
+
+            # # Add this code after the existing DataFrame transformations but before the final column selection
+            # df['my_categoria'] = df.apply(categorize, axis=1)
 
 
 

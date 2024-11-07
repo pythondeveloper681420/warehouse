@@ -449,8 +449,7 @@ class WarehouseApp:
             </style>
         """, unsafe_allow_html=True)
         
-        # Verificar se o usuário está logado antes de acessar a página principal
-        if 'logged_in' not in st.session_state or not st.session_state.logged_in:
+        if not st.session_state.logged_in:
             self.login_page()
         else:
             self.main_page()
