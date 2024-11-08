@@ -377,15 +377,17 @@ class WarehouseApp:
             </style>
         """, unsafe_allow_html=True)
         
-        st.title("Sistema Warehouse")
+        col1, col2= st.columns([2, 1])
+        
+        col1.title("Sistema Warehouse")
         
         token = st.query_params.get("token")
         if token:
             self.user_manager.validate_token(token)
             st.query_params.clear()
             st.rerun()
-        
-        tab1, tab2 = st.tabs(["Login", "Cadastro"])
+            
+        tab1, tab2 = col1.tabs(["Login", "Cadastro"])
         
         with tab1:
             with st.form("login_form"):
@@ -403,6 +405,9 @@ class WarehouseApp:
                 password = st.text_input("Senha (6 dígitos)", type="password")
                 if st.form_submit_button("Cadastrar"):
                     self.user_manager.create_user(name, email, password, phone)
+        
+        col2.image("login (8).jpg",
+                   width=400)            
 
     def main_page(self):
         # Criando o container principal com duas colunas
