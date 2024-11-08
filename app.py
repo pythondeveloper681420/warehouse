@@ -505,8 +505,8 @@ class WarehouseApp:
                         st.error("A senha deve conter apenas números")
                     else:
                         self.user_manager.create_user(name, email, clean_password, phone)
-                        
-        col2.image("login (8).jpg", width=400)
+        
+        col2.image(r"images/LOGIN (6).jpeg")
 
     def main_page(self):
         """Renderiza a página principal do sistema"""
