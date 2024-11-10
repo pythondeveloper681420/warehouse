@@ -140,9 +140,11 @@ class DataFilterApp:
             try:
                 # Load XML collection
                 xml_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'xml')
+                xml_df = xml_df.drop("creation_date")
                 
                 # Load PO collection
                 po_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'po')
+                po_df = po_df.drop("creation_date")
                 po_df = po_df.unique(subset=['Purchasing Document'])
 
                 # Check if XML and PO have data
@@ -177,6 +179,8 @@ class DataFilterApp:
                         right_on='Purchasing Document_cleaned',
                         how='left'
                     ).sort(by=['dtEmi', 'nNf', 'itemNf'], descending=[True, False, False])
+                    
+                    merged_xml_po = merged_xml_po.drop("creation_date")
 
                     self.dataframes['merged_data'] = merged_xml_po
 
@@ -186,6 +190,7 @@ class DataFilterApp:
 
                 # Load NFSPDF collection
                 nfspdf_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'nfspdf')
+                nfspdf_df = nfspdf_df.drop("creation_date")
                 if not nfspdf_df.is_empty() and not po_df.is_empty():
                     # Standardize 'po' column in NFSPDF
                     po_column_name = 'po' if 'po' in nfspdf_df.columns else None
@@ -201,8 +206,11 @@ class DataFilterApp:
                             right_on='Purchasing Document_cleaned',
                             how='left'
                         ).sort(by=['Data Emissão'], descending=True)
+                        
+                        merged_nfspdf_po = merged_nfspdf_po.drop("creation_date")
 
                         self.dataframes['merged_nfspdf'] = merged_nfspdf_po
+                        
 
                     else:
                         st.warning("PO column not found in the NFSPDF collection.")
@@ -324,7 +332,8 @@ class DataFilterApp:
         
         with col2:
             if st.button("🔄 Refresh Data", use_container_width=True):
-                self.refresh_data()
+                #self.refresh_data()
+                self._load_and_merge_collections()
 
 
         tabs = st.tabs(["🆕 Merged Data", "🗃️ NFSPDF", "📄 PO"])
