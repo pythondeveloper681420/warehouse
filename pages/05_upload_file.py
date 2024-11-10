@@ -3,7 +3,7 @@ import pandas as pd
 from pymongo import MongoClient, errors
 import urllib.parse
 import numpy as np
-from datetime import datetime, time, timezone
+from datetime import datetime, time
 import time as time_module
 from contextlib import contextmanager
 import dns.resolver
@@ -111,14 +111,11 @@ def mongodb_connection():
                 client.close()
 
 def handle_date(value):
-    """Função para tratar datas e horários com suporte a UTC"""
+    """Função para tratar datas e horários"""
     if pd.isna(value) or pd.isnull(value):
         return None
     if isinstance(value, pd.Timestamp):
-        # Converte para UTC se ainda não estiver
-        if value.tzinfo is None:
-            value = value.tz_localize('UTC')
-        return value.strftime('%Y-%m-%d %H:%M:%S %z')
+        return value.strftime('%Y-%m-%d %H:%M:%S')
     if isinstance(value, time):
         return value.strftime('%H:%M:%S')
     return value
@@ -127,8 +124,8 @@ def clean_dataframe(df):
     """Limpa e prepara o DataFrame para inserção no MongoDB"""
     df_clean = df.copy()
     
-    # Atualizado: Usando datetime.now(timezone.utc) em vez de utcnow()
-    df_clean['creation_date'] = datetime.now(timezone.utc)
+    # Adiciona creation_date automaticamente
+    df_clean['creation_date'] = datetime.utcnow()
     
     for column in df_clean.columns:
         if df_clean[column].dtype in ['datetime64[ns]', 'datetime64[ns, UTC]']:
