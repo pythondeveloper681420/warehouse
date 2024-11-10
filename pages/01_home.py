@@ -217,13 +217,13 @@ class DataFilterApp:
                 self.dataframes['merged_nfspdf'] = pl.DataFrame()
                 self.dataframes['po'] = pl.DataFrame()
 
-    # def refresh_data(self):
-    #     """Refresh all collections from MongoDB"""
-    #     with st.spinner("Atualizando dados do MongoDB..."):
-    #         self._load_and_merge_collections()
-    #         #st.success("Data refreshed successfully!")
-    #         # Clear any cached values
-    #         st.cache_data.clear()    
+    def refresh_data(self):
+        """Refresh all collections from MongoDB"""
+        with st.spinner("Atualizando dados do MongoDB..."):
+            self._load_and_merge_collections()
+            #st.success("Data refreshed successfully!")
+            # Clear any cached values
+            st.cache_data.clear()    
     
     def _create_filters(self, df, collection_name):
         if df.is_empty():
