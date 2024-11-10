@@ -3,7 +3,7 @@ import pandas as pd
 from pymongo import MongoClient, errors
 import urllib.parse
 import numpy as np
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 import time as time_module
 from contextlib import contextmanager
 import dns.resolver
@@ -125,7 +125,7 @@ def clean_dataframe(df):
     df_clean = df.copy()
     
     # Adiciona creation_date automaticamente
-    df_clean['creation_date'] = datetime.utcnow()
+    df_clean['creation_date'] = datetime.now(timezone.utc)
     
     for column in df_clean.columns:
         if df_clean[column].dtype in ['datetime64[ns]', 'datetime64[ns, UTC]']:

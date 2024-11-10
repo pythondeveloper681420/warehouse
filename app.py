@@ -1,6 +1,7 @@
 #pip freeze > requirements.txt
 #python -m venv .venv
 #.venv\Scripts\activate.bat
+#streamlit run app.py
 import streamlit as st
 import pymongo
 import urllib.parse
