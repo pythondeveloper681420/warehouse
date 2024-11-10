@@ -304,544 +304,543 @@ def main():
 
         if uploaded_files:
             # Progress bar
-            if st.button('Processar',type='primary'):    
-                progress_bar = st.progress(0)
-                for percent_complete in range(100):
-                    time.sleep(0.01)
-                    progress_bar.progress(percent_complete + 1)
-                progress_bar.empty()
+            progress_bar = st.progress(0)
+            for percent_complete in range(100):
+                time.sleep(0.01)
+                progress_bar.progress(percent_complete + 1)
+            progress_bar.empty()
 
-                # Process XML files
-                xml_reader = ReadXML(uploaded_files)
-                dados = xml_reader.process_xml_files()
+            # Process XML files
+            xml_reader = ReadXML(uploaded_files)
+            dados = xml_reader.process_xml_files()
 
-        # Criando DataFrame Pandas
-                df = pd.DataFrame(dados, columns=[
-                    'chaveNfe', 'NFe', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 'CNPJ Emitente', 'Nome Emitente',
-                    'CNPJ Destinatário', 'Nome Destinatário', 'Valor NF-e', 'Valor Frete', 'Item Nota', 'Cód Produto',
-                    'Quantidade', 'Descrição', 'Unidade Medida', 'vlUnProd', 'vlTotProd', 'ncm', 'cfop' ,'xPed', 'nItemPed',
-                    'infAdProd', 'Data Importação', 'Usuário', 'Data Saída', 'Fatura', 'Duplicata', 'Valor Original', 'Valor Pago',
-                    'Logradouro Emitente', 'Número Emitente', 'Complemento Emitente', 'Bairro Emitente', 'Município Emitente',
-                    'UF Emitente', 'CEP Emitente', 'País Emitente', 'Logradouro Destinatário', 'Número Destinatário',
-                    'Complemento Destinatário', 'Bairro Destinatário', 'Município Destinatário', 'UF Destinatário',
-                    'CEP Destinatário', 'País Destinatário'
-                ])
+    # Criando DataFrame Pandas
+            df = pd.DataFrame(dados, columns=[
+                'chaveNfe', 'NFe', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 'CNPJ Emitente', 'Nome Emitente',
+                'CNPJ Destinatário', 'Nome Destinatário', 'Valor NF-e', 'Valor Frete', 'Item Nota', 'Cód Produto',
+                'Quantidade', 'Descrição', 'Unidade Medida', 'vlUnProd', 'vlTotProd', 'ncm', 'cfop' ,'xPed', 'nItemPed',
+                'infAdProd', 'Data Importação', 'Usuário', 'Data Saída', 'Fatura', 'Duplicata', 'Valor Original', 'Valor Pago',
+                'Logradouro Emitente', 'Número Emitente', 'Complemento Emitente', 'Bairro Emitente', 'Município Emitente',
+                'UF Emitente', 'CEP Emitente', 'País Emitente', 'Logradouro Destinatário', 'Número Destinatário',
+                'Complemento Destinatário', 'Bairro Destinatário', 'Município Destinatário', 'UF Destinatário',
+                'CEP Destinatário', 'País Destinatário'
+            ])
 
-                colunas = [
-                    'chaveNfe', 'NFe', 'Nome Emitente', 'Descrição', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 
-                    'CNPJ Emitente', 'CNPJ Destinatário', 'Nome Destinatário', 'Valor NF-e', 'Valor Frete', 'Item Nota', 
-                    'Cód Produto', 'Quantidade', 'Unidade Medida', 'vlUnProd', 'vlTotProd', 'ncm', 'cfop', 'xPed', 'nItemPed', 
-                    'infAdProd', 'Data Importação', 'Usuário', 'Data Saída', 'Fatura', 'Duplicata', 'Valor Original', 
-                    'Valor Pago', 'Logradouro Emitente', 'Número Emitente', 'Complemento Emitente', 'Bairro Emitente', 
-                    'Município Emitente', 'UF Emitente', 'CEP Emitente', 'País Emitente', 'Logradouro Destinatário', 
-                    'Número Destinatário', 'Complemento Destinatário', 'Bairro Destinatário', 'Município Destinatário', 
-                    'UF Destinatário', 'CEP Destinatário', 'País Destinatário'
-                ]
+            colunas = [
+                'chaveNfe', 'NFe', 'Nome Emitente', 'Descrição', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 
+                'CNPJ Emitente', 'CNPJ Destinatário', 'Nome Destinatário', 'Valor NF-e', 'Valor Frete', 'Item Nota', 
+                'Cód Produto', 'Quantidade', 'Unidade Medida', 'vlUnProd', 'vlTotProd', 'ncm', 'cfop', 'xPed', 'nItemPed', 
+                'infAdProd', 'Data Importação', 'Usuário', 'Data Saída', 'Fatura', 'Duplicata', 'Valor Original', 
+                'Valor Pago', 'Logradouro Emitente', 'Número Emitente', 'Complemento Emitente', 'Bairro Emitente', 
+                'Município Emitente', 'UF Emitente', 'CEP Emitente', 'País Emitente', 'Logradouro Destinatário', 
+                'Número Destinatário', 'Complemento Destinatário', 'Bairro Destinatário', 'Município Destinatário', 
+                'UF Destinatário', 'CEP Destinatário', 'País Destinatário'
+            ]
 
-                df = df.reindex(columns=colunas)
+            df = df.reindex(columns=colunas)
 
-                # Create unique identifier using slugify
-                df['unique'] = df['NFe'].astype(str) + '-' + df['Item Nota'].astype(str) + '-' + df['Descrição'].astype(str)
-                df['unique'] = df['unique'].apply(slugify)
-                
-                # Remove duplicates based on the slugified unique column
-                df.drop_duplicates(subset='unique', inplace=True)
-                
-                # df=df_formatted
-                def convert_to_decimal(df, columns, decimal_places=2):
-                    """Converte várias colunas para float (decimais) e arredonda para o número especificado de casas decimais."""
-                    for column in columns:
-                        # Converte para float e força valores inválidos para NaN
-                        df[column] = pd.to_numeric(df[column], errors='coerce').astype(float)
-                        # Arredonda para o número de casas decimais especificado
-                        df[column] = df[column].round(decimal_places)
-                    return df
+            # Create unique identifier using slugify
+            df['unique'] = df['NFe'].astype(str) + '-' + df['Item Nota'].astype(str) + '-' + df['Descrição'].astype(str)
+            df['unique'] = df['unique'].apply(slugify)
+            
+            # Remove duplicates based on the slugified unique column
+            df.drop_duplicates(subset='unique', inplace=True)
+            
+            # df=df_formatted
+            def convert_to_decimal(df, columns, decimal_places=2):
+                """Converte várias colunas para float (decimais) e arredonda para o número especificado de casas decimais."""
+                for column in columns:
+                    # Converte para float e força valores inválidos para NaN
+                    df[column] = pd.to_numeric(df[column], errors='coerce').astype(float)
+                    # Arredonda para o número de casas decimais especificado
+                    df[column] = df[column].round(decimal_places)
+                return df
 
-                # Supondo que você queira converter as colunas 'preco' e 'quantidade' para decimais com duas casas
-                columns_to_convert = ['Quantidade','vlUnProd','vlTotProd']
+            # Supondo que você queira converter as colunas 'preco' e 'quantidade' para decimais com duas casas
+            columns_to_convert = ['Quantidade','vlUnProd','vlTotProd']
 
-                # Converter as colunas para decimal (float) com duas casas decimais
-                df = convert_to_decimal(df, columns_to_convert, decimal_places=2) 
-                
-                # Função para formatar os números corretamente, lidando com valores vazios
-                def formatar_numero(x):
-                    if pd.isna(x) or x == '':  # Se o valor for nulo ou string vazia
-                        return None  # Retorna None para manter o valor como NaN
+            # Converter as colunas para decimal (float) com duas casas decimais
+            df = convert_to_decimal(df, columns_to_convert, decimal_places=2) 
+            
+            # Função para formatar os números corretamente, lidando com valores vazios
+            def formatar_numero(x):
+                if pd.isna(x) or x == '':  # Se o valor for nulo ou string vazia
+                    return None  # Retorna None para manter o valor como NaN
+                else:
+                    x_str = str(int(x))  # Certificar que seja inteiro e sem pontos ou espaços
+                    
+                    # Garantindo que o número tenha pelo menos dois dígitos
+                    if len(x_str) > 2:
+                        # Inserindo o ponto decimal entre os dois últimos dígitos
+                        return x_str[:-2] + "." + x_str[-2:]
                     else:
-                        x_str = str(int(x))  # Certificar que seja inteiro e sem pontos ou espaços
-                        
-                        # Garantindo que o número tenha pelo menos dois dígitos
-                        if len(x_str) > 2:
-                            # Inserindo o ponto decimal entre os dois últimos dígitos
-                            return x_str[:-2] + "." + x_str[-2:]
-                        else:
-                            # Se o número for menor que 100, apenas adiciona '0.xx'
-                            return "0." + x_str.zfill(2)
+                        # Se o número for menor que 100, apenas adiciona '0.xx'
+                        return "0." + x_str.zfill(2)
 
 
-                # Aplicar a função diretamente nas colunas existentes
-                colunas_para_formatar = ['Valor NF-e', 'Valor Original', 'Valor Pago']
-                
-                for coluna in colunas_para_formatar:
-                    # Formatar os números na coluna e converter para float
-                    df[coluna] = df[coluna].apply(formatar_numero).astype(float)
-                        
-                # Agrupando por 'Category' e somando os valores de 'Value'
-                df['vlNf'] = df.groupby('chaveNfe')['vlTotProd'].transform('sum')
-
-                df['Descrição'] = df['Descrição'].apply(clean_description).str.upper()
-                
-                # Aplicar a função para filtrar e formatar a coluna 'info_adic'
-                df['po'] = df['info_adic'].fillna("") + " " + df['xPed'].fillna("") + " " + df['nItemPed'].fillna("") + " " + df['infAdProd'].fillna("")
-                #df['po'] = df['po'].apply(filter_info_adic)
-                df['po'] = df['po'].apply(extract_numbers)
-                
-                # Função para truncar os primeiros 10 caracteres
-                def truncate_to_10_chars(text):
-                    return text[:10] if text else ""
-
-                df['po'] = df['po'].apply(truncate_to_10_chars)
-
-
-                # Função para obter o primeiro valor não vazio para cada 'chaveNfe'
-                def get_first_non_empty_po(df):
-                    first_non_empty_po = {}
-                    for chave, po in zip(df['chaveNfe'], df['po']):
-                        if pd.notna(po) and po != '' and chave not in first_non_empty_po:
-                            first_non_empty_po[chave] = po
-                    return first_non_empty_po
+            # Aplicar a função diretamente nas colunas existentes
+            colunas_para_formatar = ['Valor NF-e', 'Valor Original', 'Valor Pago']
+            
+            for coluna in colunas_para_formatar:
+                # Formatar os números na coluna e converter para float
+                df[coluna] = df[coluna].apply(formatar_numero).astype(float)
                     
+            # Agrupando por 'Category' e somando os valores de 'Value'
+            df['vlNf'] = df.groupby('chaveNfe')['vlTotProd'].transform('sum')
 
-                # Atualiza a coluna 'po' com o primeiro valor não vazio
-                first_po_dict = get_first_non_empty_po(df)
-                df['po'] = df['chaveNfe'].map(first_po_dict)                   
+            df['Descrição'] = df['Descrição'].apply(clean_description).str.upper()
+            
+            # Aplicar a função para filtrar e formatar a coluna 'info_adic'
+            df['po'] = df['info_adic'].fillna("") + " " + df['xPed'].fillna("") + " " + df['nItemPed'].fillna("") + " " + df['infAdProd'].fillna("")
+            #df['po'] = df['po'].apply(filter_info_adic)
+            df['po'] = df['po'].apply(extract_numbers)
+            
+            # Função para truncar os primeiros 10 caracteres
+            def truncate_to_10_chars(text):
+                return text[:10] if text else ""
+
+            df['po'] = df['po'].apply(truncate_to_10_chars)
+
+
+            # Função para obter o primeiro valor não vazio para cada 'chaveNfe'
+            def get_first_non_empty_po(df):
+                first_non_empty_po = {}
+                for chave, po in zip(df['chaveNfe'], df['po']):
+                    if pd.notna(po) and po != '' and chave not in first_non_empty_po:
+                        first_non_empty_po[chave] = po
+                return first_non_empty_po
                 
-                def format_date_to_brazilian(df, columns):
-                    """
-                    Converte as colunas especificadas para o formato de data brasileiro (dd/mm/aaaa).
-                    
-                    :param df: DataFrame a ser modificado
-                    :param columns: Lista de nomes das colunas a serem formatadas
-                    :return: DataFrame com as colunas formatadas como datas brasileiras
-                    """
-                    for column in columns:
-                        # First, try converting to datetime, handling different potential input formats
+
+            # Atualiza a coluna 'po' com o primeiro valor não vazio
+            first_po_dict = get_first_non_empty_po(df)
+            df['po'] = df['chaveNfe'].map(first_po_dict)                   
+              
+            def format_date_to_brazilian(df, columns):
+                """
+                Converte as colunas especificadas para o formato de data brasileiro (dd/mm/aaaa).
+                
+                :param df: DataFrame a ser modificado
+                :param columns: Lista de nomes das colunas a serem formatadas
+                :return: DataFrame com as colunas formatadas como datas brasileiras
+                """
+                for column in columns:
+                    # First, try converting to datetime, handling different potential input formats
+                    try:
+                        # Try multiple datetime parsing strategies
+                        df[column] = pd.to_datetime(
+                            df[column], 
+                            format='%Y-%m-%d',  # ISO format
+                            errors='coerce'
+                        )
+                    except:
                         try:
-                            # Try multiple datetime parsing strategies
                             df[column] = pd.to_datetime(
                                 df[column], 
-                                format='%Y-%m-%d',  # ISO format
+                                format='%d/%m/%Y',  # Brazilian format
                                 errors='coerce'
                             )
                         except:
-                            try:
-                                df[column] = pd.to_datetime(
-                                    df[column], 
-                                    format='%d/%m/%Y',  # Brazilian format
-                                    errors='coerce'
-                                )
-                            except:
-                                # If conversion fails, leave the column as is
-                                continue
-                        
-                        # Format to Brazilian date string only for non-null values
-                        df[column] = df[column].dt.strftime('%d/%m/%Y')
+                            # If conversion fails, leave the column as is
+                            continue
                     
-                    return df
-
-                # Aplicar a formatação desejada
-                df = format_date_to_brazilian(df, ['dVenc'])
-                                            
-                #Função para formatar colunas como moeda brasileira (BRL)
+                    # Format to Brazilian date string only for non-null values
+                    df[column] = df[column].dt.strftime('%d/%m/%Y')
                 
-                def format_to_brl_currency(df, columns):
-                    """
-                    Formata as colunas especificadas do DataFrame para o formato de moeda brasileiro (Real) com duas casas decimais.
-                    Valores não numéricos ou vazios são substituídos por uma string vazia.
+                return df
+
+            # Aplicar a formatação desejada
+            df = format_date_to_brazilian(df, ['dVenc'])
+                                        
+            #Função para formatar colunas como moeda brasileira (BRL)
+            
+            def format_to_brl_currency(df, columns):
+                """
+                Formata as colunas especificadas do DataFrame para o formato de moeda brasileiro (Real) com duas casas decimais.
+                Valores não numéricos ou vazios são substituídos por uma string vazia.
+                
+                :param df: DataFrame a ser modificado
+                :param columns: Lista de nomes das colunas a serem formatadas
+                :return: DataFrame com as colunas formatadas como moeda brasileira
+                """
+                for column in columns:
+                    df[column] = pd.to_numeric(df[column], errors='coerce')
+
+                    #df[column] = df[column].apply(lambda x: f'R${x:,.2f}'.replace('.', ',') if pd.notna(x) else '')
                     
-                    :param df: DataFrame a ser modificado
-                    :param columns: Lista de nomes das colunas a serem formatadas
-                    :return: DataFrame com as colunas formatadas como moeda brasileira
-                    """
-                    for column in columns:
-                        df[column] = pd.to_numeric(df[column], errors='coerce')
+                    # Convertendo valores para formato desejado
+                    df[column] = df[column].apply(lambda x: 'R$ {:,.2f}'.format(x / 1))
+                    df[column] = df[column].str.replace(',', 'X').str.replace('.', ',').str.replace('X', '.')
+                return df
 
-                        #df[column] = df[column].apply(lambda x: f'R${x:,.2f}'.replace('.', ',') if pd.notna(x) else '')
+            df = df
+                            
+            def convert_columns_to_numeric(df, columns):
+                """Converte várias colunas para numérico, forçando erros para NaN."""
+                for column in columns:
+                    df[column] = pd.to_numeric(df[column], errors='coerce')
+                return df
+
+            # Supondo que você queira converter as colunas 'po' e 'NFe'
+            columns_to_convert = ['po','NFe','Série','CNPJ Emitente','CNPJ Destinatário','ncm','cfop','CEP Emitente','País Emitente','CEP Destinatário','País Destinatário'] 
+            
+            # Converter as colunas relevantes para numérico
+            df = convert_columns_to_numeric(df, columns_to_convert)   
+
+            # Ordenar o DataFrame pela coluna 'Data' do mais novo para o mais velho
+            df = df.sort_values(by='Data de Emissão', ascending=False)  
+
+            # Selecionando colunas, renomeando e reordenando
+            colunas_para_exibir =['chaveNfe','NFe','Nome Emitente','Descrição','Série','natOp','Data de Emissão',
+                                    'info_adic','dVenc','CNPJ Destinatário','Nome Destinatário','Valor NF-e',
+                                    'Valor Frete','Item Nota','Cód Produto','Quantidade','Unidade Medida','vlUnProd','vlTotProd',
+                                    'ncm','cfop','xPed','nItemPed','infAdProd','Data Importação','Usuário','Data Saída','Fatura',
+                                    'Duplicata','Valor Original','Valor Pago',
+                                    'Logradouro Emitente','Número Emitente','Complemento Emitente','Bairro Emitente','Município Emitente','UF Emitente','CEP Emitente','País Emitente',
+                                    'Logradouro Destinatário','Número Destinatário','Complemento Destinatário','Bairro Destinatário','Município Destinatário','UF Destinatário','CEP Destinatário','País Destinatário',
+                                    'vlNf','po','unique']
+            
+            # Renomear as colunas
+
+            df = df.rename(columns={'NFe': 'nNf', 'Data de Emissão': 'dtEmi','Item Nota':'itemNf','Descrição':'nomeMaterial','ncm':'ncm','Quantidade':'qtd',
+                            'Unidade Medida':'und','vlUnProd':'vlUnProd','vlTotProd':'vlTotProd','Valor NF-e':'vlTotalNf',
+                            'dVenc':'dVenc','po':'po',
+                            'chaveNfe':'chNfe',
+                            'Nome Emitente': 'emitNome','CNPJ Emitente':'emitCnpj','Logradouro Emitente':'emitLogr','Número Emitente':'emitNr','Complemento Emitente':'emitCompl','Bairro Emitente':'emitBairro','Município Emitente':'emitMunic','UF Emitente':'emitUf','CEP Emitente':'emitCep','País Emitente':'emitPais',
+                            'Nome Destinatário': 'destNome','CNPJ Destinatário':'destCnpj','Logradouro Destinatário':'destLogr','Número Destinatário':'destNr','Complemento Destinatário':'destCompl','Bairro Destinatário':'destBairro','Município Destinatário':'destMunic','UF Destinatário':'destUf','CEP Destinatário':'destCep','País Destinatário':'destPais',
+                            'cfop':'cfop','unique':'unique'})
+
+            # Exibir apenas as colunas renomeadas
+            colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
+                                    'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
+                                    'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
+                                    'cfop','unique']
+            
+            df= df[colunas_renomeadas]
+            
+            
+            # Converter as colunas para string
+            df['emitCnpj'] = df['emitCnpj'].astype(str).replace('.0','')
+            df['destCnpj'] = df['destCnpj'].astype(str).replace('.0','')
+
+            # Garantir que as colunas tenham 14 dígitos
+            df['emitCnpj'] = df['emitCnpj'].str.zfill(14)
+            df['destCnpj'] = df['destCnpj'].str.zfill(14)
+            
+            st.write(f"Quantidade de linhas: {df.shape[0]}")
+                       
+            # Create a new column counting invoices per PO
+            po_invoice_counts = df.groupby('po')['chNfe'].nunique().reset_index()
+            po_invoice_counts.columns = ['po', 'total_invoices_per_po']
+            df = df.merge(po_invoice_counts, on='po', how='left')
+            
+            def categorize_transaction(row):
+                """
+                Categorize transactions based on CFOP and whether Andritz is the emitter
+                Includes categories for maintenance, repairs, and returns
+                """
+                cfop = str(row['cfop'])
+                emit_nome = str(row['emitNome']).upper()
+                
+                # Check if Andritz is the emitter
+                is_andritz_emitter = 'ANDRITZ' in emit_nome
+                
+                # Manutenção, Conserto e Reparo CFOPs
+                manutencao_entrada_cfops = ['1915', '2915', '1916', '2916']  # Entrada para reparo
+                manutencao_saida_cfops = ['5915', '6915', '5916', '6916']    # Saída para reparo
+                
+                # Retorno de mercadoria CFOPs
+                retorno_entrada_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
+                                        '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504']
+                retorno_saida_cfops = ['5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', '5504',
+                                    '6201', '6202', '6210', '6410', '6411', '6412', '6413', '6503', '6504']
+                
+                # Remessa CFOPs
+                remessa_entrada_cfops = ['1554','1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', '1913', '1914', '1921',
+                                        '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909', '2913', '2914', '2921']
+                remessa_saida_cfops = ['5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909', '5913', '5914', '5921',
+                                    '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909', '6913', '6914', '6921']
+                
+                # Devolução CFOPs
+                devolucao_entrada_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', '1504', '1921',
+                                        '2201', '2202', '2203', '2204', '2209', '2410', '2411', '2503', '2504', '2921']
+                devolucao_saida_cfops = ['5201', '5202', '5203', '5204', '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
+                                        '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', '6413', '6503', '6504', '6921']
+
+                # Industrialização CFOPs
+                industrializacao_entrada_cfops = ['1124', '1125', '1126', '2124', '2125', '2126']
+                industrializacao_saida_cfops = ['5124', '5125', '5126', '6124', '6125', '6126']
+
+                # Categorization logic
+                if cfop in manutencao_entrada_cfops or cfop in manutencao_saida_cfops:
+                    return "Manutenção/Conserto/Reparo"
+                
+                elif cfop in retorno_entrada_cfops or cfop in retorno_saida_cfops:
+                    return "Retorno de Mercadoria"
+                
+                elif cfop in remessa_entrada_cfops or cfop in remessa_saida_cfops:
+                    return "Remessa"
+                
+                elif cfop in devolucao_entrada_cfops or cfop in devolucao_saida_cfops:
+                    return "Devolução"
+                    
+                elif cfop in industrializacao_entrada_cfops or cfop in industrializacao_saida_cfops:
+                    return "Industrialização"
+                
+                elif cfop.startswith('3') or cfop.startswith('7'):
+                    return "Importação/Exportação"
+                    
+                elif cfop.startswith('1') or cfop.startswith('2'):  # Entrada
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais"
+                    else:
+                        return "Compra de Terceiros"
                         
-                        # Convertendo valores para formato desejado
-                        df[column] = df[column].apply(lambda x: 'R$ {:,.2f}'.format(x / 1))
-                        df[column] = df[column].str.replace(',', 'X').str.replace('.', ',').str.replace('X', '.')
-                    return df
+                elif cfop.startswith('5') or cfop.startswith('6'):  # Saída
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais"
+                    else:
+                        return "Venda para Terceiros"
+                        
+                return "Outros"  # Default category
 
-                df = df
+            # Add this code after the existing DataFrame transformations but before the final column selection
+            df['categoria'] = df.apply(categorize_transaction, axis=1)
+            
+            def categorize(row):
+                """
+                Categoriza transações baseando-se no CFOP, emitente e destinatário.
+                As categorias incluem manutenção, retorno, devolução, vendas, industrialização,
+                transferências detalhadas, com um foco em clareza e compreensão para todos os envolvidos.
+                """
+                cfop = str(row['cfop'])
+                emit_nome = str(row['emitNome']).upper()  # Nome do emitente
+                dest_nome = str(row['destNome']).upper()  # Nome do destinatário
+                
+                # Verifica se Andritz é o emitente ou destinatário
+                is_andritz_emitter = 'ANDRITZ' in emit_nome
+                is_andritz_dest = 'ANDRITZ' in dest_nome
+
+                # Categorias de CFOPs
+                manutencao_cfops = ['1915', '2915', '1916', '2916', '5915', '6915', '5916', '6916']
+                retorno_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
+                                '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504',
+                                '5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', 
+                                '5504', '6201', '6202', '6210', '6410', '6411', '6412', '6413', 
+                                '6503', '6504']
+                
+                devolucao_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', 
+                                '1504', '1921', '2201', '2202', '2203', '2204', '2209', '2410', 
+                                '2411', '2503', '2504', '2921', '5201', '5202', '5203', '5204', 
+                                '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
+                                '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', 
+                                '6413', '6503', '6504', '6921']
+                
+                industrializacao_cfops = ['1124', '1125', '1126', '2124', '2125', '2126', 
+                                        '5124', '5125', '5126', '6124', '6125', '6126']
+                
+                venda_cfops = ['5101', '5102', '5401', '5403', '5405', '5551', '5653', '5656', 
+                            '6101', '6102', '6107', '6108', '6401', '6403', '6404', '5923', 
+                            '6653', '6923']
+                
+                # Transferências detalhadas entre filiais
+                transferencia_envio_cfops = ['6949', '5554', '6554', '6555']  # Envio
+                transferencia_retorno_cfops = ['1949', '2554', '2908', '2949']  # Retorno
+                
+                # Lógica de categorização detalhada com mais clareza
+                if cfop in manutencao_cfops:
+                    if is_andritz_emitter:
+                        return "Manutenção/Conserto/Reparo - Envio para Andritz"
+                    else:
+                        return "Retorno de Manutenção/Reparo - Devolução para Fornecedor"
+                
+                elif cfop in retorno_cfops:
+                    return "Retorno de Mercadoria - Devolução de Produto ao Fornecedor"
+                
+                elif cfop in devolucao_cfops:
+                    return "Devolução de Mercadoria - Retorno de Produto ao Cliente"
+                
+                elif cfop in industrializacao_cfops:
+                    return "Industrialização - Processamento de Mercadorias para Produção"
+                
+                elif cfop in venda_cfops:
+                    if is_andritz_emitter:
+                        return "Venda Própria - Comercialização de Produtos Andritz"
+                    else:
+                        return "Venda de Terceiros - Venda de Produtos de Fornecedores"
+                
+                # Identificação das transferências entre filiais
+                elif cfop in transferencia_envio_cfops:
+                    if is_andritz_emitter:
+                        return "Transferência Entre Filiais - Envio de Produtos Andritz"
+                    else:
+                        return "Transferência Entre Filiais - Envio para Recebimento"
+                
+                elif cfop in transferencia_retorno_cfops:
+                    if is_andritz_dest:
+                        return "Transferência Entre Filiais - Retorno de Produtos Andritz"
+                    else:
+                        return "Transferência Entre Filiais - Retorno para Recebimento"
+                
+                return "Outros - Categoria Padrão para CFOPs Não Identificados"
+
+            # Aplicar a função de categorização
+            df['my_categoria'] = df.apply(categorize, axis=1)
+            
+            # def categorize(row):
+            #     """
+            #     Categorize transactions based on CFOP and whether Andritz is the emitter
+            #     Includes categories for maintenance, repairs, and returns
+            #     """
+            #     cfop = str(row['cfop'])
+            #     emit_nome = str(row['emitNome']).upper()
+                
+            #     # Check if Andritz is the emitter
+            #     is_andritz_emitter = 'ANDRITZ' in emit_nome
+                
+            #     # Manutenção, Conserto e Reparo CFOPs
+            #     manutencao_entrada_cfops = ['1915', '2915', '1916', '2916']  # Entrada para reparo
+            #     manutencao_saida_cfops = ['5915', '6915', '5916', '6916']    # Saída para reparo
+                
+            #     # Retorno de mercadoria CFOPs
+            #     retorno_entrada_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
+            #                             '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504']
+            #     retorno_saida_cfops = ['5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', '5504',
+            #                         '6201', '6202', '6210', '6410', '6411', '6412', '6413', '6503', '6504']
+                
+            #     # Remessa CFOPs
+            #     remessa_entrada_cfops = ['1554','1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', '1913', '1914', '1921',
+            #                             '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909', '2913', '2914', '2921']
+            #     remessa_saida_cfops = ['5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909', '5913', '5914', '5921',
+            #                         '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909', '6913', '6914', '6921']
+                
+            #     # Devolução CFOPs
+            #     devolucao_entrada_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', '1504', '1921',
+            #                             '2201', '2202', '2203', '2204', '2209', '2410', '2411', '2503', '2504', '2921']
+            #     devolucao_saida_cfops = ['5201', '5202', '5203', '5204', '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
+            #                             '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', '6413', '6503', '6504', '6921']
+
+            #     # Industrialização CFOPs
+            #     industrializacao_entrada_cfops = ['1124', '1125', '1126', '2124', '2125', '2126']
+            #     industrializacao_saida_cfops = ['5124', '5125', '5126', '6124', '6125', '6126']
+                
+            #     venda=['5101','5102','5401','5403','5405','5551','5653','5656','6101','6102','6107','6108','6401','6403','6404','5923','6653','6923']
+            #     transf_filiais_retorno=['1949','2554','2908','2949']
+            #     transf_filiais_envio=['6949','5554','6554','6555']
+            #     manutencao_envio=['5915','5901','6915']
+                
+
+
+
+            #     # Categorization logic
+            #     # if cfop in manutencao_entrada_cfops or cfop in manutencao_saida_cfops:
+            #     #     return "Manutenção/Conserto/Reparo"
+                
+            #     # elif cfop in retorno_entrada_cfops or cfop in retorno_saida_cfops:
+            #     #     return "Retorno de Mercadoria"
+                
+            #     # elif cfop in remessa_entrada_cfops or cfop in remessa_saida_cfops:
+            #     #     return "Remessa"
+                
+            #     # elif cfop in devolucao_entrada_cfops or cfop in devolucao_saida_cfops:
+            #     #     return "Devolução"
+                    
+            #     # elif cfop in industrializacao_entrada_cfops or cfop in industrializacao_saida_cfops:
+            #     #     return "Industrialização"
+                
+            #     # elif cfop.startswith('3') or cfop.startswith('7'):
+            #     #     return "Importação/Exportação"
+                    
+            #     # elif cfop.startswith('1') or cfop.startswith('2'):  # Entrada
+            #     #     if is_andritz_emitter:
+            #     #         return "Transferência Entre Filiais"
+            #     #     else:
+            #     #         return "Compra de Terceiros"
+                        
+            #     # elif cfop.startswith('5') or cfop.startswith('6'):  # Saída
+            #     #     if is_andritz_emitter:
+            #     #         return "Transferência Entre Filiais"
+            #     #     else:
+            #     #         return "Venda para Terceiros"
+            #     if cfop in manutencao_envio:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Manutenção/Conserto/Reparo - Envio"
+            #         else:
+            #             return "Manutenção/Conserto/Reparo - Retorno"
+                    
+            #     elif cfop in venda:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Transferência Entre Filiais - venda"
+            #         else:
+            #             return "Venda de Terceiros"
+                    
+            #     elif cfop in transf_filiais_retorno:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Transferência Entre Filiais - Retorno"
+            #         else:
+            #             return "Manutenção/Conserto/Reparo - Retorno" 
+                    
+            #     elif cfop in transf_filiais_envio:  # Saída
+            #         if is_andritz_emitter:
+            #             return "Transferência Entre Filiais - Envio"
+            #         else:
+            #             return "Manutenção/Conserto/Reparo - Envio"  
                                 
-                def convert_columns_to_numeric(df, columns):
-                    """Converte várias colunas para numérico, forçando erros para NaN."""
-                    for column in columns:
-                        df[column] = pd.to_numeric(df[column], errors='coerce')
-                    return df
+            #     return "Outros"  # Default category
 
-                # Supondo que você queira converter as colunas 'po' e 'NFe'
-                columns_to_convert = ['po','NFe','Série','CNPJ Emitente','CNPJ Destinatário','ncm','cfop','CEP Emitente','País Emitente','CEP Destinatário','País Destinatário'] 
-                
-                # Converter as colunas relevantes para numérico
-                df = convert_columns_to_numeric(df, columns_to_convert)   
+            # # Add this code after the existing DataFrame transformations but before the final column selection
+            # df['my_categoria'] = df.apply(categorize, axis=1)
 
-                # Ordenar o DataFrame pela coluna 'Data' do mais novo para o mais velho
-                df = df.sort_values(by='Data de Emissão', ascending=False)  
 
-                # Selecionando colunas, renomeando e reordenando
-                colunas_para_exibir =['chaveNfe','NFe','Nome Emitente','Descrição','Série','natOp','Data de Emissão',
-                                        'info_adic','dVenc','CNPJ Destinatário','Nome Destinatário','Valor NF-e',
-                                        'Valor Frete','Item Nota','Cód Produto','Quantidade','Unidade Medida','vlUnProd','vlTotProd',
-                                        'ncm','cfop','xPed','nItemPed','infAdProd','Data Importação','Usuário','Data Saída','Fatura',
-                                        'Duplicata','Valor Original','Valor Pago',
-                                        'Logradouro Emitente','Número Emitente','Complemento Emitente','Bairro Emitente','Município Emitente','UF Emitente','CEP Emitente','País Emitente',
-                                        'Logradouro Destinatário','Número Destinatário','Complemento Destinatário','Bairro Destinatário','Município Destinatário','UF Destinatário','CEP Destinatário','País Destinatário',
-                                        'vlNf','po','unique']
-                
-                # Renomear as colunas
 
-                df = df.rename(columns={'NFe': 'nNf', 'Data de Emissão': 'dtEmi','Item Nota':'itemNf','Descrição':'nomeMaterial','ncm':'ncm','Quantidade':'qtd',
-                                'Unidade Medida':'und','vlUnProd':'vlUnProd','vlTotProd':'vlTotProd','Valor NF-e':'vlTotalNf',
-                                'dVenc':'dVenc','po':'po',
-                                'chaveNfe':'chNfe',
-                                'Nome Emitente': 'emitNome','CNPJ Emitente':'emitCnpj','Logradouro Emitente':'emitLogr','Número Emitente':'emitNr','Complemento Emitente':'emitCompl','Bairro Emitente':'emitBairro','Município Emitente':'emitMunic','UF Emitente':'emitUf','CEP Emitente':'emitCep','País Emitente':'emitPais',
-                                'Nome Destinatário': 'destNome','CNPJ Destinatário':'destCnpj','Logradouro Destinatário':'destLogr','Número Destinatário':'destNr','Complemento Destinatário':'destCompl','Bairro Destinatário':'destBairro','Município Destinatário':'destMunic','UF Destinatário':'destUf','CEP Destinatário':'destCep','País Destinatário':'destPais',
-                                'cfop':'cfop','unique':'unique'})
+                       
+                            # Exibir apenas as colunas renomeadas
+            colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
+                                    'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
+                                    'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
+                                    'cfop','total_invoices_per_po', 'categoria','my_categoria','unique']
+            
+            df= df[colunas_renomeadas]
 
-                # Exibir apenas as colunas renomeadas
-                colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
-                                        'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
-                                        'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                        'cfop','unique']
-                
-                df= df[colunas_renomeadas]
-                
-                
-                # Converter as colunas para string
-                df['emitCnpj'] = df['emitCnpj'].astype(str).replace('.0','')
-                df['destCnpj'] = df['destCnpj'].astype(str).replace('.0','')
-
-                # Garantir que as colunas tenham 14 dígitos
-                df['emitCnpj'] = df['emitCnpj'].str.zfill(14)
-                df['destCnpj'] = df['destCnpj'].str.zfill(14)
-                
-                st.write(f"Quantidade de linhas: {df.shape[0]}")
+            groupby_cols_nf = ['chNfe']
+            df['total_itens_nf'] = df.groupby(groupby_cols_nf )['qtd'].transform('sum')
+            
+            groupby_cols_po = ['po']
+            df['total_itens_po'] = df.groupby(groupby_cols_po )['qtd'].transform('sum')
+            df['valor_recebido_po'] = df.groupby(groupby_cols_po )['vlTotProd'].transform('sum')
                         
-                # Create a new column counting invoices per PO
-                po_invoice_counts = df.groupby('po')['chNfe'].nunique().reset_index()
-                po_invoice_counts.columns = ['po', 'total_invoices_per_po']
-                df = df.merge(po_invoice_counts, on='po', how='left')
-                
-                def categorize_transaction(row):
-                    """
-                    Categorize transactions based on CFOP and whether Andritz is the emitter
-                    Includes categories for maintenance, repairs, and returns
-                    """
-                    cfop = str(row['cfop'])
-                    emit_nome = str(row['emitNome']).upper()
-                    
-                    # Check if Andritz is the emitter
-                    is_andritz_emitter = 'ANDRITZ' in emit_nome
-                    
-                    # Manutenção, Conserto e Reparo CFOPs
-                    manutencao_entrada_cfops = ['1915', '2915', '1916', '2916']  # Entrada para reparo
-                    manutencao_saida_cfops = ['5915', '6915', '5916', '6916']    # Saída para reparo
-                    
-                    # Retorno de mercadoria CFOPs
-                    retorno_entrada_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
-                                            '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504']
-                    retorno_saida_cfops = ['5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', '5504',
-                                        '6201', '6202', '6210', '6410', '6411', '6412', '6413', '6503', '6504']
-                    
-                    # Remessa CFOPs
-                    remessa_entrada_cfops = ['1554','1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', '1913', '1914', '1921',
-                                            '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909', '2913', '2914', '2921']
-                    remessa_saida_cfops = ['5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909', '5913', '5914', '5921',
-                                        '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909', '6913', '6914', '6921']
-                    
-                    # Devolução CFOPs
-                    devolucao_entrada_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', '1504', '1921',
-                                            '2201', '2202', '2203', '2204', '2209', '2410', '2411', '2503', '2504', '2921']
-                    devolucao_saida_cfops = ['5201', '5202', '5203', '5204', '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
-                                            '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', '6413', '6503', '6504', '6921']
+            df = df.sort_values(by=['dtEmi','nNf','itemNf'], ascending=[False,True,True])
 
-                    # Industrialização CFOPs
-                    industrializacao_entrada_cfops = ['1124', '1125', '1126', '2124', '2125', '2126']
-                    industrializacao_saida_cfops = ['5124', '5125', '5126', '6124', '6125', '6126']
+            # Download buttons
+            def convert_df_to_excel(df):
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Invoices')
+                return output.getvalue()
 
-                    # Categorization logic
-                    if cfop in manutencao_entrada_cfops or cfop in manutencao_saida_cfops:
-                        return "Manutenção/Conserto/Reparo"
-                    
-                    elif cfop in retorno_entrada_cfops or cfop in retorno_saida_cfops:
-                        return "Retorno de Mercadoria"
-                    
-                    elif cfop in remessa_entrada_cfops or cfop in remessa_saida_cfops:
-                        return "Remessa"
-                    
-                    elif cfop in devolucao_entrada_cfops or cfop in devolucao_saida_cfops:
-                        return "Devolução"
-                        
-                    elif cfop in industrializacao_entrada_cfops or cfop in industrializacao_saida_cfops:
-                        return "Industrialização"
-                    
-                    elif cfop.startswith('3') or cfop.startswith('7'):
-                        return "Importação/Exportação"
-                        
-                    elif cfop.startswith('1') or cfop.startswith('2'):  # Entrada
-                        if is_andritz_emitter:
-                            return "Transferência Entre Filiais"
-                        else:
-                            return "Compra de Terceiros"
-                            
-                    elif cfop.startswith('5') or cfop.startswith('6'):  # Saída
-                        if is_andritz_emitter:
-                            return "Transferência Entre Filiais"
-                        else:
-                            return "Venda para Terceiros"
-                            
-                    return "Outros"  # Default category
+            def convert_df_to_pickle(df):
+                return pickle.dumps(df)
 
-                # Add this code after the existing DataFrame transformations but before the final column selection
-                df['categoria'] = df.apply(categorize_transaction, axis=1)
-                
-                def categorize(row):
-                    """
-                    Categoriza transações baseando-se no CFOP, emitente e destinatário.
-                    As categorias incluem manutenção, retorno, devolução, vendas, industrialização,
-                    transferências detalhadas, com um foco em clareza e compreensão para todos os envolvidos.
-                    """
-                    cfop = str(row['cfop'])
-                    emit_nome = str(row['emitNome']).upper()  # Nome do emitente
-                    dest_nome = str(row['destNome']).upper()  # Nome do destinatário
-                    
-                    # Verifica se Andritz é o emitente ou destinatário
-                    is_andritz_emitter = 'ANDRITZ' in emit_nome
-                    is_andritz_dest = 'ANDRITZ' in dest_nome
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                excel_file = convert_df_to_excel(df)
+                st.download_button(
+                    label="Download Excel",
+                    data=excel_file,
+                    file_name="processed_invoices.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
-                    # Categorias de CFOPs
-                    manutencao_cfops = ['1915', '2915', '1916', '2916', '5915', '6915', '5916', '6916']
-                    retorno_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
-                                    '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504',
-                                    '5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', 
-                                    '5504', '6201', '6202', '6210', '6410', '6411', '6412', '6413', 
-                                    '6503', '6504']
-                    
-                    devolucao_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', 
-                                    '1504', '1921', '2201', '2202', '2203', '2204', '2209', '2410', 
-                                    '2411', '2503', '2504', '2921', '5201', '5202', '5203', '5204', 
-                                    '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
-                                    '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', 
-                                    '6413', '6503', '6504', '6921']
-                    
-                    industrializacao_cfops = ['1124', '1125', '1126', '2124', '2125', '2126', 
-                                            '5124', '5125', '5126', '6124', '6125', '6126']
-                    
-                    venda_cfops = ['5101', '5102', '5401', '5403', '5405', '5551', '5653', '5656', 
-                                '6101', '6102', '6107', '6108', '6401', '6403', '6404', '5923', 
-                                '6653', '6923']
-                    
-                    # Transferências detalhadas entre filiais
-                    transferencia_envio_cfops = ['6949', '5554', '6554', '6555']  # Envio
-                    transferencia_retorno_cfops = ['1949', '2554', '2908', '2949']  # Retorno
-                    
-                    # Lógica de categorização detalhada com mais clareza
-                    if cfop in manutencao_cfops:
-                        if is_andritz_emitter:
-                            return "Manutenção/Conserto/Reparo - Envio para Andritz"
-                        else:
-                            return "Retorno de Manutenção/Reparo - Devolução para Fornecedor"
-                    
-                    elif cfop in retorno_cfops:
-                        return "Retorno de Mercadoria - Devolução de Produto ao Fornecedor"
-                    
-                    elif cfop in devolucao_cfops:
-                        return "Devolução de Mercadoria - Retorno de Produto ao Cliente"
-                    
-                    elif cfop in industrializacao_cfops:
-                        return "Industrialização - Processamento de Mercadorias para Produção"
-                    
-                    elif cfop in venda_cfops:
-                        if is_andritz_emitter:
-                            return "Venda Própria - Comercialização de Produtos Andritz"
-                        else:
-                            return "Venda de Terceiros - Venda de Produtos de Fornecedores"
-                    
-                    # Identificação das transferências entre filiais
-                    elif cfop in transferencia_envio_cfops:
-                        if is_andritz_emitter:
-                            return "Transferência Entre Filiais - Envio de Produtos Andritz"
-                        else:
-                            return "Transferência Entre Filiais - Envio para Recebimento"
-                    
-                    elif cfop in transferencia_retorno_cfops:
-                        if is_andritz_dest:
-                            return "Transferência Entre Filiais - Retorno de Produtos Andritz"
-                        else:
-                            return "Transferência Entre Filiais - Retorno para Recebimento"
-                    
-                    return "Outros - Categoria Padrão para CFOPs Não Identificados"
+            with col2:
+                pickle_file = convert_df_to_pickle(df)
+                st.download_button(
+                    label="Download Pickle",
+                    data=pickle_file,
+                    file_name="processed_invoices.pkl",
+                    mime="application/octet-stream"
+                )
 
-                # Aplicar a função de categorização
-                df['my_categoria'] = df.apply(categorize, axis=1)
-                
-                # def categorize(row):
-                #     """
-                #     Categorize transactions based on CFOP and whether Andritz is the emitter
-                #     Includes categories for maintenance, repairs, and returns
-                #     """
-                #     cfop = str(row['cfop'])
-                #     emit_nome = str(row['emitNome']).upper()
-                    
-                #     # Check if Andritz is the emitter
-                #     is_andritz_emitter = 'ANDRITZ' in emit_nome
-                    
-                #     # Manutenção, Conserto e Reparo CFOPs
-                #     manutencao_entrada_cfops = ['1915', '2915', '1916', '2916']  # Entrada para reparo
-                #     manutencao_saida_cfops = ['5915', '6915', '5916', '6916']    # Saída para reparo
-                    
-                #     # Retorno de mercadoria CFOPs
-                #     retorno_entrada_cfops = ['1201', '1202', '1203', '1204', '1410', '1411', '1503', '1504', 
-                #                             '2201', '2202', '2203', '2204', '2410', '2411', '2503', '2504']
-                #     retorno_saida_cfops = ['5201', '5202', '5210', '5410', '5411', '5412', '5413', '5503', '5504',
-                #                         '6201', '6202', '6210', '6410', '6411', '6412', '6413', '6503', '6504']
-                    
-                #     # Remessa CFOPs
-                #     remessa_entrada_cfops = ['1554','1901', '1902', '1903', '1904', '1905', '1906', '1907', '1908', '1909', '1913', '1914', '1921',
-                #                             '2901', '2902', '2903', '2904', '2905', '2906', '2907', '2908', '2909', '2913', '2914', '2921']
-                #     remessa_saida_cfops = ['5901', '5902', '5903', '5904', '5905', '5906', '5907', '5908', '5909', '5913', '5914', '5921',
-                #                         '6901', '6902', '6903', '6904', '6905', '6906', '6907', '6908', '6909', '6913', '6914', '6921']
-                    
-                #     # Devolução CFOPs
-                #     devolucao_entrada_cfops = ['1201', '1202', '1203', '1204', '1209', '1410', '1411', '1503', '1504', '1921',
-                #                             '2201', '2202', '2203', '2204', '2209', '2410', '2411', '2503', '2504', '2921']
-                #     devolucao_saida_cfops = ['5201', '5202', '5203', '5204', '5209', '5410', '5411', '5412', '5413', '5503', '5504', '5921',
-                #                             '6201', '6202', '6203', '6204', '6209', '6410', '6411', '6412', '6413', '6503', '6504', '6921']
-
-                #     # Industrialização CFOPs
-                #     industrializacao_entrada_cfops = ['1124', '1125', '1126', '2124', '2125', '2126']
-                #     industrializacao_saida_cfops = ['5124', '5125', '5126', '6124', '6125', '6126']
-                    
-                #     venda=['5101','5102','5401','5403','5405','5551','5653','5656','6101','6102','6107','6108','6401','6403','6404','5923','6653','6923']
-                #     transf_filiais_retorno=['1949','2554','2908','2949']
-                #     transf_filiais_envio=['6949','5554','6554','6555']
-                #     manutencao_envio=['5915','5901','6915']
-                    
-
-
-
-                #     # Categorization logic
-                #     # if cfop in manutencao_entrada_cfops or cfop in manutencao_saida_cfops:
-                #     #     return "Manutenção/Conserto/Reparo"
-                    
-                #     # elif cfop in retorno_entrada_cfops or cfop in retorno_saida_cfops:
-                #     #     return "Retorno de Mercadoria"
-                    
-                #     # elif cfop in remessa_entrada_cfops or cfop in remessa_saida_cfops:
-                #     #     return "Remessa"
-                    
-                #     # elif cfop in devolucao_entrada_cfops or cfop in devolucao_saida_cfops:
-                #     #     return "Devolução"
-                        
-                #     # elif cfop in industrializacao_entrada_cfops or cfop in industrializacao_saida_cfops:
-                #     #     return "Industrialização"
-                    
-                #     # elif cfop.startswith('3') or cfop.startswith('7'):
-                #     #     return "Importação/Exportação"
-                        
-                #     # elif cfop.startswith('1') or cfop.startswith('2'):  # Entrada
-                #     #     if is_andritz_emitter:
-                #     #         return "Transferência Entre Filiais"
-                #     #     else:
-                #     #         return "Compra de Terceiros"
-                            
-                #     # elif cfop.startswith('5') or cfop.startswith('6'):  # Saída
-                #     #     if is_andritz_emitter:
-                #     #         return "Transferência Entre Filiais"
-                #     #     else:
-                #     #         return "Venda para Terceiros"
-                #     if cfop in manutencao_envio:  # Saída
-                #         if is_andritz_emitter:
-                #             return "Manutenção/Conserto/Reparo - Envio"
-                #         else:
-                #             return "Manutenção/Conserto/Reparo - Retorno"
-                        
-                #     elif cfop in venda:  # Saída
-                #         if is_andritz_emitter:
-                #             return "Transferência Entre Filiais - venda"
-                #         else:
-                #             return "Venda de Terceiros"
-                        
-                #     elif cfop in transf_filiais_retorno:  # Saída
-                #         if is_andritz_emitter:
-                #             return "Transferência Entre Filiais - Retorno"
-                #         else:
-                #             return "Manutenção/Conserto/Reparo - Retorno" 
-                        
-                #     elif cfop in transf_filiais_envio:  # Saída
-                #         if is_andritz_emitter:
-                #             return "Transferência Entre Filiais - Envio"
-                #         else:
-                #             return "Manutenção/Conserto/Reparo - Envio"  
-                                    
-                #     return "Outros"  # Default category
-
-                # # Add this code after the existing DataFrame transformations but before the final column selection
-                # df['my_categoria'] = df.apply(categorize, axis=1)
-
-
-
-                        
-                                # Exibir apenas as colunas renomeadas
-                colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
-                                        'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
-                                        'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                        'cfop','total_invoices_per_po', 'categoria','my_categoria','unique']
-                
-                df= df[colunas_renomeadas]
-
-                groupby_cols_nf = ['chNfe']
-                df['total_itens_nf'] = df.groupby(groupby_cols_nf )['qtd'].transform('sum')
-                
-                groupby_cols_po = ['po']
-                df['total_itens_po'] = df.groupby(groupby_cols_po )['qtd'].transform('sum')
-                df['valor_recebido_po'] = df.groupby(groupby_cols_po )['vlTotProd'].transform('sum')
-                            
-                df = df.sort_values(by=['dtEmi','nNf','itemNf'], ascending=[False,True,True])
-
-                # Download buttons
-                def convert_df_to_excel(df):
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                        df.to_excel(writer, index=False, sheet_name='Invoices')
-                    return output.getvalue()
-
-                def convert_df_to_pickle(df):
-                    return pickle.dumps(df)
-
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    excel_file = convert_df_to_excel(df)
-                    st.download_button(
-                        label="Download Excel",
-                        data=excel_file,
-                        file_name="processed_invoices.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-
-                with col2:
-                    pickle_file = convert_df_to_pickle(df)
-                    st.download_button(
-                        label="Download Pickle",
-                        data=pickle_file,
-                        file_name="processed_invoices.pkl",
-                        mime="application/octet-stream"
-                    )
-
-                st.success(f"Processed {len(uploaded_files)} XML files")
+            st.success(f"Processed {len(uploaded_files)} XML files")
     with tab2:
         st.header("Visualização de Dados")
         if 'df' in locals():

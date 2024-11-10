@@ -311,7 +311,6 @@ def extrair_dados_nf(pdf_file):
 
     return dados_nf
 
-
 def to_excel(df):
     """Convert dataframe to excel file and encode it for download"""
     output = BytesIO()
@@ -340,8 +339,7 @@ def main():
             )
 
         if uploaded_files:
-            #with st.spinner('Processando os arquivos...'):
-            if st.button('Processar',type='primary'):    
+            with st.spinner('Processando os arquivos...'):
                 dados_extraidos = []
                 progress_bar = st.progress(0)
                 for i, pdf_file in enumerate(uploaded_files):
