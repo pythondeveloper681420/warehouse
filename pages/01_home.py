@@ -114,7 +114,7 @@ class DataFilterApp:
             layout="wide",
             initial_sidebar_state="collapsed"
         )
-            
+        
     def _clean_po_number(self, df, po_column):
         """Clean PO numbers by removing non-numeric characters and .0 suffix"""
         try:
@@ -132,21 +132,12 @@ class DataFilterApp:
             st.warning(f"Warning: Could not clean column {po_column}: {e}")
             # If cleaning fails, create an empty cleaned column
             return df.with_columns(pl.lit("").alias(f"{po_column}_cleaned"))
-       
-    def refresh_data(self):
-        """Refresh all collections from MongoDB"""
-        with st.spinner("Atualizando dados do MongoDB..."):
-            self._load_and_merge_collections()
-            #st.success("Data refreshed successfully!")
-            # Clear any cached values
-            st.cache_data.clear()    
 
     def _load_and_merge_collections(self):
-        with st.spinner("Carregando e mesclando dados..."):
+        with st.spinner("Loading and merging data..."):
             try:
                 # Load XML collection
                 xml_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'xml')
-                xml_df = xml_df.unique(subset=['unique'])
                 # Load PO collection
                 po_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'po')
                 po_df = po_df.unique(subset=['Purchasing Document'])
@@ -223,7 +214,6 @@ class DataFilterApp:
                 self.dataframes['merged_nfspdf'] = pl.DataFrame()
                 self.dataframes['po'] = pl.DataFrame()
 
-    
     def _create_filters(self, df, collection_name):
         if df.is_empty():
             st.error("No data available to filter")
@@ -313,17 +303,7 @@ class DataFilterApp:
         return filtered_df
 
     def run(self):
-        
-        col1, col2 = st.columns([6, 1])
-        #running
-        with col1:
-            st.title("📊 MongoDB Dashboard")
-        
-                # Add refresh button in the header
-        
-        with col2:
-            if st.button("🔄 Refresh Data", use_container_width=True):
-                self.refresh_data()
+        st.title("📊 MongoDB Dashboard")
 
 
         tabs = st.tabs(["🆕 Merged Data", "🗃️ NFSPDF", "📄 PO"])
