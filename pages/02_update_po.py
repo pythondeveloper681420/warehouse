@@ -148,9 +148,9 @@ class DataProcessor:
             df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
             df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Order Quantity'].transform('sum')
                         
-            df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
-            df_processed = df_processed.dropna(subset=['Purchasing Document'])
-            df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
+            # df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
+            # df_processed = df_processed.dropna(subset=['Purchasing Document'])
+            # df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
             
             df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'], dayfirst=True)
             df_processed = df_processed.sort_values(by='PO Creation Date', ascending=False)
@@ -489,7 +489,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
         st.error("Ocorreu um erro inesperado. Por favor, tente novamente.")
-#unique       
+        
 # Footer
 st.markdown("---")
 st.markdown(
