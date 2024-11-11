@@ -333,7 +333,8 @@ class DataFilterApp:
                     st.dataframe(
                         filtered_df.to_pandas(),
                         use_container_width=True,
-                        height=600
+                        hide_index=True,
+                        #height=600
                     )
 
 if __name__ == "__main__":
