@@ -489,7 +489,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
         st.error("Ocorreu um erro inesperado. Por favor, tente novamente.")
-        
+#unique       
 # Footer
 st.markdown("---")
 st.markdown(
