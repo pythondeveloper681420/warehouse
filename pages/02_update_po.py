@@ -62,53 +62,6 @@ class DataProcessor:
     """Class to handle all data processing operations"""
     
     @staticmethod
-    def clean_purchasing_document(value: Any) -> str:
-        """Clean and standardize Purchasing Document values"""
-        try:
-            # Remove any non-numeric characters
-            if isinstance(value, str):
-                cleaned = ''.join(filter(str.isdigit, value))
-                return cleaned if cleaned else '0'
-            elif pd.isna(value):
-                return '0'
-            return str(int(value))
-        except:
-            return '0'
-        
-    
-    @staticmethod
-    def standardize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-        """Standardize DataFrame columns and types before processing"""
-        try:
-            # Create a copy to avoid modifying the original
-            df = df.copy()
-            
-            # Ensure all required columns exist
-            required_columns = set(SELECTED_COLUMNS)
-            existing_columns = set(df.columns)
-            
-            # Add missing columns with default values
-            for col in required_columns - existing_columns:
-                df[col] = None
-                
-            # Clean and standardize Purchasing Document column
-            df['Purchasing Document'] = df['Purchasing Document'].apply(
-                DataProcessor.clean_purchasing_document
-            )
-            
-            # Convert numeric columns
-            numeric_cols = ['Order Quantity', 'Net order value', 'PBXX Condition Amount']
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce').fillna(0)
-            
-            return df
-            
-        except Exception as e:
-            logger.error(f"Error standardizing DataFrame: {str(e)}")
-            raise    
-    
-    @staticmethod
     def format_currency(value: float) -> str:
         """Format value as Brazilian currency"""
         try:
@@ -162,7 +115,6 @@ class DataProcessor:
         except Exception as e:
             logger.error(f"Error processing chunk: {str(e)}")
             raise
-    
 
     @staticmethod
     def process_dataframe(df: pd.DataFrame, progress_bar: Any) -> pd.DataFrame:
@@ -200,19 +152,8 @@ class DataProcessor:
             df_processed = df_processed.dropna(subset=['Purchasing Document'])
             df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
             
-            # Fix date parsing
-            try:
-                df_processed['PO Creation Date'] = pd.to_datetime(
-                    df_processed['Document Date'],
-                    format='%d/%m/%Y',  # Specify exact format
-                    errors='coerce'
-                )
-            except Exception as e:
-                logger.warning(f"Error parsing dates: {str(e)}")
-                df_processed['PO Creation Date'] = pd.NaT
-            
+            df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'], dayfirst=True)
             df_processed = df_processed.sort_values(by='PO Creation Date', ascending=False)
-            
             
             currency_columns = [
                 'valor_unitario', 'valor_item_com_impostos', 'Net order value',
@@ -243,7 +184,8 @@ class DataProcessor:
             df_processed = df_processed[SELECTED_COLUMNS]        
                        
             return df_processed
-            
+        
+                         
         except Exception as e:
             logger.error(f"Error in process_dataframe: {str(e)}")
             raise
@@ -268,18 +210,9 @@ class FileHandler:
 
     @staticmethod
     def read_excel_file(file: Any) -> Optional[pd.DataFrame]:
-        """Safely read Excel file with proper data type handling"""
+        """Safely read Excel file"""
         try:
-            # Read Excel file with string data types initially
-            df = pd.read_excel(
-                file,
-                engine='openpyxl',
-                dtype=str  # Read all columns as strings initially
-            )
-            
-            # Standardize the DataFrame
-            return DataProcessor.standardize_dataframe(df)
-            
+            return pd.read_excel(file, engine='openpyxl')
         except Exception as e:
             logger.error(f"Error reading file {file.name}: {str(e)}")
             return None
@@ -357,9 +290,8 @@ def main():
     #st.subheader("📁 Seleção de Arquivos")
     tab1, tab2, tab3 = st.tabs(["📤 Upload e Extração", "📊 Visualização de Dados", "❓ Como Utilizar"])
 
-    with tab1:
-        # Corrected code with col1 and col2 properly defined
-        col1, col2 = st.columns([3,1])  # Define col1 and col2 within a columns context
+    with tab1:   
+        col1, col2 = st.columns([3, 1])
         
         with col1:
             uploaded_files = st.file_uploader(
@@ -403,18 +335,23 @@ def main():
                             progress_bar.progress((idx + 1) / len(uploaded_files))
                         
                         if all_dfs:
-                            df_final = pd.concat(all_dfs, ignore_index=True, copy=False)
+                            df_final = pd.concat(all_dfs, ignore_index=True)
+                            
+                            df = df_final 
+                            
                             df_processed = DataProcessor.process_dataframe(df_final, progress_bar)
                             
                             st.session_state.processed_data = df_processed
+                            
                             st.session_state.download_filename = f'processamento_po_{timestamp}.xlsx'
+                            
+                            # Convert to base64 and store in session state
                             st.session_state.excel_data = FileHandler.to_excel(df_processed)
                             
                             elapsed_time = time.time() - start_time
                             
                             st.success("✅ Processamento concluído com sucesso!")
                             
-                            # Display metrics
                             col1, col2, col3 = st.columns(3)
                             col1.metric("Tempo de processamento", f"{elapsed_time:.2f}s")
                             col2.metric("Arquivos processados", len(uploaded_files))
@@ -428,22 +365,23 @@ def main():
                     logger.error(f"Error during processing: {str(e)}")
                     st.error(f"❌ Erro durante o processamento: {str(e)}")
         
-            if st.session_state.excel_data is not None:
-                st.subheader("📥 Download do Arquivo Processado")
-                download_link = get_download_link(
-                    st.session_state.excel_data,
-                    st.session_state.download_filename
-                )
-                st.markdown(download_link, unsafe_allow_html=True)
+        if st.session_state.excel_data is not None:
+            st.subheader("📥 Download do Arquivo Processado")
+            download_link = get_download_link(
+                st.session_state.excel_data,
+                st.session_state.download_filename
+            )
+            st.markdown(download_link, unsafe_allow_html=True)
 
-                if st.button("🔄 Limpar e Voltar ao Início", use_container_width=True):
-                    clear_session_state()
-                    st.rerun()
-        #__main__:          
+            # Add a button to manually clear the cache and return to initial state
+            if st.button("🔄 Limpar e Voltar ao Início", use_container_width=True):
+                clear_session_state()
+                st.rerun()
+                
     with tab2:
-        if st.session_state.processed_data is not None:
-            df_view = st.session_state.processed_data[
-                ['Purchasing Document',
+       if st.session_state.excel_data is not None:
+                 
+            df=df[['Purchasing Document',
                 'Item',
                 'Supplier',
                 'Vendor Name',
@@ -456,28 +394,53 @@ def main():
                 'Andritz WBS Element',
                 'Cost Center',
                 'Document Date', 
+                # 'PO Creation Date',
                 'PO Created by',
-                'Purchase Requisition']
-            ]
-            
-            # Key Metrics
+                'Purchase Requisition',
+                # 'total_itens_po',
+                # 'valor_unitario_formatted', 
+                # 'total_valor_po_liquido_formatted', 
+                # 'total_valor_po_com_impostos_formatted',
+                # 'Order Quantity',
+                # 'total_itens_po',
+                # 'unique'
+                ]]
+            df['unique'] = (
+                df['Purchasing Document'].astype(str) + 
+                df['Item'].astype(str)
+            )
+            df = df.drop_duplicates(subset=['unique'])
+            #st.dataframe(df)
+            st.header("Visualização de Dados")
+                    # Key Metrics
             col1, col2, col3 = st.columns(3)
-            
+                    
             with col1:
-                total_invoices = len(df_view)
+                total_invoices = len(df)
                 st.metric(label="Total de Linhas", value=total_invoices)
-    
+        
             with col2:
-                unique_issuers = df_view['Vendor Name'].nunique()
-                st.metric(label="Número de Fornecedores", value=unique_issuers)
-    
+                 unique_issuers = df['Vendor Name'].nunique()
+                 st.metric(label="Número de Fornecedores", value=unique_issuers)
+        
             with col3:
-                unique_pos = df_view['Purchasing Document'].nunique()
-                st.metric(label="Número de PO'S", value=unique_pos)
+                 unique_issuers = df['Purchasing Document'].nunique()
+                 st.metric(label="Número de PO'S", value=unique_issuers)
             
-            # Display DataFrame
-            st.dataframe(df_view, hide_index=True)
-        else:
+            # # Global Search Filter
+            # st.subheader("Filtrar Dados")
+            # search_term = st.text_input("Busca Global (filtra em todas as colunas)")
+        
+            # if search_term:
+            #     # Create a boolean mask that checks if the search term is in any column
+            #         mask = df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)
+            #         filtered_df = df[mask]
+            # else:
+            #         filtered_df = df
+            
+                # Display filtered DataFrame without index
+            st.dataframe(df, hide_index=True)  
+       else:
             st.info("Faça o upload dos arquivos na aba 'Upload e Extração' para visualizar os dados.")
            
     
@@ -526,7 +489,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
         st.error("Ocorreu um erro inesperado. Por favor, tente novamente.")
-
+        
 # Footer
 st.markdown("---")
 st.markdown(
@@ -536,4 +499,4 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True
-)
+)        
