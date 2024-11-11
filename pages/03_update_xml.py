@@ -18,7 +18,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-#dVenc
+
 # Main title
 st.header("📃 Processamento de Arquivos XML")
 
@@ -160,7 +160,7 @@ class ReadXML:
         #data_emissao = f"{data_emissao[8:10]}/{data_emissao[5:7]}/{data_emissao[:4]}" if data_emissao else ""
         info_adic = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:infAdic/ns:infCpl", nsNFe))
         dVenc = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:cobr/ns:dup/ns:dVenc", nsNFe))
-        dVenc = f"{dVenc[8:10]}/{dVenc[5:7]}/{dVenc[:4]}" if dVenc else ""
+        #dVenc = f"{dVenc[8:10]}/{dVenc[5:7]}/{dVenc[:4]}" if dVenc else ""
         #dVenc = dVenc.replace("//", "")
 
         # Dados Emitente
@@ -449,9 +449,7 @@ def main():
                 return df
 
             # Aplicar a formatação desejada
-            #df = format_date_to_brazilian(df, ['dVenc'])
-            #df['dVenc'] = pd.to_datetime(df['dVenc'], format='%Y-%m-%d', dayfirst=True)
-
+            df = format_date_to_brazilian(df, ['dVenc'])
                                         
             #Função para formatar colunas como moeda brasileira (BRL)
             

@@ -109,10 +109,7 @@ class DataProcessor:
             chunk_processed['valor_item_com_impostos'] = (
                 chunk_processed['PBXX Condition Amount'] * chunk_processed['Order Quantity']
             )
-            # Exemplo de aplicação das duas correções
-            chunk_processed.loc[:, 'Supplier'] = pd.to_numeric(chunk_processed['Supplier'], errors='coerce')
-            chunk_processed.loc[:, 'Supplier'] = chunk_processed['Supplier'].astype(str)  # Se a coluna for para ser texto
-                        
+            
             return chunk_processed
             
         except Exception as e:
@@ -151,13 +148,12 @@ class DataProcessor:
             df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
             df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Order Quantity'].transform('sum')
                         
-            # df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
-            # df_processed = df_processed.dropna(subset=['Purchasing Document'])
-            # df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
+            df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
+            df_processed = df_processed.dropna(subset=['Purchasing Document'])
+            df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
             
             df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'], dayfirst=True)
             df_processed = df_processed.sort_values(by='PO Creation Date', ascending=False)
-        
             
             currency_columns = [
                 'valor_unitario', 'valor_item_com_impostos', 'Net order value',
@@ -183,9 +179,6 @@ class DataProcessor:
                         errors='coerce'
                     )
                     df_processed[col] = df_processed[col].dt.strftime('%d/%m/%Y')
-                    df_processed[col] = pd.to_datetime(df_processed[col], errors='coerce')
-
-                    
                     
             # Select only the desired columns
             df_processed = df_processed[SELECTED_COLUMNS]        
