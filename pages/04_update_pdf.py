@@ -339,7 +339,8 @@ def main():
             )
 
         if uploaded_files:
-            with st.spinner('Processando os arquivos...'):
+            if st.button("🚀 Iniciar Processamento", use_container_width=True, type="primary"):
+                st.spinner('Processando os arquivos...')
                 dados_extraidos = []
                 progress_bar = st.progress(0)
                 for i, pdf_file in enumerate(uploaded_files):
