@@ -59,24 +59,34 @@ def standardize_po_number(df, po_column):
     except Exception as e:
         st.warning(f"Warning: Could not standardize column {po_column}: {e}")
         return df
-    
+
 @st.cache_data
-def mongo_collection_to_polars(mongo_uri, db_name, collection_name):
+def mongo_collection_to_polars(mongo_uri, db_name, collection_name, page_size, page_num, filters=None):
     try:
         client = MongoClient(mongo_uri)
         db = client[db_name]
         collection = db[collection_name]
-        documents = list(collection.find())
+        
+        if filters:
+            query = filters
+        else:
+            query = {}
+        
+        total_count = collection.count_documents(query)
+        
+        cursor = collection.find(query)
+        cursor = cursor.skip(page_size * page_num).limit(page_size)
+        documents = list(cursor)
         documents = convert_objectid_to_str(documents)
         
         if not documents:
-            return pl.DataFrame()
+            return pl.DataFrame(), 0, 0
         
         polars_df = pl.DataFrame(documents, infer_schema_length=1000)
-        return polars_df
+        return polars_df, page_size, total_count
     except Exception as e:
         st.error(f"Error loading collection {collection_name}: {e}")
-        return pl.DataFrame()
+        return pl.DataFrame(), 0, 0
 
 @st.cache_data
 def get_unique_values(_df, column):
@@ -91,7 +101,7 @@ class DataFilterApp:
         self.password = 'dD@pjl06081420'
         self.cluster = 'cluster0.akbb8.mongodb.net'
         self.db_name = 'warehouse'
-        self.collections = ['merged_data', 'merged_nfspdf', 'po']
+        self.collections = ['xml', 'nfspdf', 'po']
         
         self.mongo_uri = self._get_mongo_uri()
         self._setup_page()
@@ -100,6 +110,8 @@ class DataFilterApp:
             st.session_state.current_filters = {}
         
         self.dataframes = {}
+        self.page_sizes = {}
+        self.total_counts = {}
         self._load_and_merge_collections()
 
     def _get_mongo_uri(self):
@@ -115,104 +127,62 @@ class DataFilterApp:
             initial_sidebar_state="collapsed"
         )
         
-    def _clean_po_number(self, df, po_column):
-        """Clean PO numbers by removing non-numeric characters and .0 suffix"""
-        try:
-            return df.with_columns([
-                pl.when(pl.col(po_column).is_null())
-                .then(pl.lit(""))
-                .otherwise(
-                    pl.col(po_column).cast(pl.Utf8)
-                    .str.replace_all(r'[^\d]', '')
-                    .str.replace(r'\.0$', '')
-                )
-                .alias(f"{po_column}_cleaned")
-            ])
-        except Exception as e:
-            st.warning(f"Warning: Could not clean column {po_column}: {e}")
-            # If cleaning fails, create an empty cleaned column
-            return df.with_columns(pl.lit("").alias(f"{po_column}_cleaned"))
-
     def _load_and_merge_collections(self):
         with st.spinner("Loading and merging data..."):
             try:
                 # Load XML collection
-                xml_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'xml')
-                # Load PO collection
-                po_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'po')
-                po_df = po_df.unique(subset=['Purchasing Document'])
-
-                # Check if XML and PO have data
-                if not xml_df.is_empty() and not po_df.is_empty():
-                    # Standardize 'po' column in XML
-                    xml_df = xml_df.with_columns([
-                        pl.col('po').cast(pl.Utf8).str.replace_all(r'\D', '').alias('po_cleaned')
-                    ])
-                    # Remove '.0' from the end of 'po' values after converting to string
-                    xml_df = xml_df.with_columns([
-                        pl.col('po').cast(pl.Utf8)  # Convert to string
-                        .str.replace(r'\.0$', '')    # Remove the '.0' at the end of values
-                        .alias('po_cleaned')         # Column for the join
-                    ])
-                    # Standardize 'Purchasing Document' column in PO
-                    po_df = po_df.with_columns([
-                        pl.col('Purchasing Document').cast(pl.Utf8).str.replace_all(r'\D', '').alias('Purchasing Document_cleaned')
-                    ])
-                    
-                    # Filter specific columns from PO for the join
-                    po_df = po_df.select([
-                        'Purchasing Document_cleaned',
-                        'Project Code',
-                        'Andritz WBS Element',
-                        'Cost Center'
-                    ])
-
-                    # Perform the join between XML and PO using the standardized columns
-                    merged_xml_po = xml_df.join(
-                        po_df,
-                        left_on='po_cleaned',
-                        right_on='Purchasing Document_cleaned',
-                        how='left'
-                    ).sort(by=['dtEmi', 'nNf', 'itemNf'], descending=[True, False, False])
-
-                    self.dataframes['merged_data'] = merged_xml_po
-
-                else:
-                    st.error("XML or PO is empty.")
+                st.write("Loading XML collection...")
+                try:
+                    xml_df, page_size_xml, total_count_xml = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'xml', 100, 0)
+                    st.write(f"XML collection loaded. Page size: {page_size_xml}, Total count: {total_count_xml}")
+                    self.dataframes['merged_data'] = xml_df
+                    self.page_sizes['merged_data'] = page_size_xml
+                    self.total_counts['merged_data'] = total_count_xml
+                except Exception as e:
+                    st.error(f"Error loading XML collection: {str(e)}")
                     self.dataframes['merged_data'] = pl.DataFrame()
+                    self.page_sizes['merged_data'] = 0
+                    self.total_counts['merged_data'] = 0
 
                 # Load NFSPDF collection
-                nfspdf_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'nfspdf')
-                if not nfspdf_df.is_empty() and not po_df.is_empty():
-                    # Standardize 'po' column in NFSPDF
-                    po_column_name = 'po' if 'po' in nfspdf_df.columns else None
-                    if po_column_name:
-                        nfspdf_df = nfspdf_df.with_columns([
-                            pl.col(po_column_name).cast(pl.Utf8).str.replace_all(r'\D', '').alias('po_cleaned')
-                        ])
+                st.write("Loading NFSPDF collection...")
+                try:
+                    nfspdf_df, page_size_nfspdf, total_count_nfspdf = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'nfspdf', 100, 0)
+                    st.write(f"NFSPDF collection loaded. Page size: {page_size_nfspdf}, Total count: {total_count_nfspdf}")
+                    self.dataframes['merged_nfspdf'] = nfspdf_df
+                    self.page_sizes['merged_nfspdf'] = page_size_nfspdf
+                    self.total_counts['merged_nfspdf'] = total_count_nfspdf
+                except Exception as e:
+                    st.error(f"Error loading NFSPDF collection: {str(e)}")
+                    self.dataframes['merged_nfspdf'] = pl.DataFrame()
+                    self.page_sizes['merged_nfspdf'] = 0
+                    self.total_counts['merged_nfspdf'] = 0
 
-                        # Perform the join between NFSPDF and PO using the standardized columns
-                        merged_nfspdf_po = nfspdf_df.join(
-                            po_df,
-                            left_on='po_cleaned',
-                            right_on='Purchasing Document_cleaned',
-                            how='left'
-                        ).sort(by=['Data Emissão'], descending=True)
-
-                        self.dataframes['merged_nfspdf'] = merged_nfspdf_po
-
-                    else:
-                        st.warning("PO column not found in the NFSPDF collection.")
-                        self.dataframes['merged_nfspdf'] = nfspdf_df
-                
                 # Load PO collection
-                self.dataframes['po'] = po_df
+                st.write("Loading PO collection...")
+                try:
+                    po_df, page_size_po, total_count_po = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'po', 100, 0)
+                    st.write(f"PO collection loaded. Page size: {page_size_po}, Total count: {total_count_po}")
+                    self.dataframes['po'] = po_df
+                    self.page_sizes['po'] = page_size_po
+                    self.total_counts['po'] = total_count_po
+                except Exception as e:
+                    st.error(f"Error loading PO collection: {str(e)}")
+                    self.dataframes['po'] = pl.DataFrame()
+                    self.page_sizes['po'] = 0
+                    self.total_counts['po'] = 0
 
             except Exception as e:
                 st.error(f"Error loading and merging collections: {str(e)}")
                 self.dataframes['merged_data'] = pl.DataFrame()
                 self.dataframes['merged_nfspdf'] = pl.DataFrame()
                 self.dataframes['po'] = pl.DataFrame()
+                self.page_sizes['merged_data'] = 0
+                self.page_sizes['merged_nfspdf'] = 0
+                self.page_sizes['po'] = 0
+                self.total_counts['merged_data'] = 0
+                self.total_counts['merged_nfspdf'] = 0
+                self.total_counts['po'] = 0
 
     def _create_filters(self, df, collection_name):
         if df.is_empty():
@@ -316,20 +286,42 @@ class DataFilterApp:
                     st.error(f"No data found in collection {collection_name}")
                     continue
                 
-                col1, col2 = st.columns([1, 4])
+                page_size = self.page_sizes[collection_name]
+                total_count = self.total_counts[collection_name]
+                
+                col1, col2, col3 = st.columns([1, 1, 4])
                 
                 with col1:
-                    st.metric("Total Records", len(df))
-                    
+                    st.metric("Total Records", total_count)
+                with col2:
+                    page_num = st.number_input(
+                        "Page Number",
+                        min_value=0,
+                        step=1,
+                        value=0,
+                        key=f"page_num_{collection_name}"
+                    )
+                with col3:
                     filters = self._create_filters(df, collection_name)
-                    
                     if filters:
-                        filtered_df = self._apply_filters(df, filters)
+                        filtered_df, _, _ = mongo_collection_to_polars(
+                            self.mongo_uri,
+                            self.db_name,
+                            collection_name,
+                            page_size,
+                            page_num,
+                            filters
+                        )
                         st.metric("Filtered Records", len(filtered_df))
                     else:
-                        filtered_df = df
+                        filtered_df, _, _ = mongo_collection_to_polars(
+                            self.mongo_uri,
+                            self.db_name,
+                            collection_name,
+                            page_size,
+                            page_num
+                        )
                     
-                with col2:
                     st.dataframe(
                         filtered_df.to_pandas(),
                         use_container_width=True,

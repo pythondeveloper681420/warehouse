@@ -7,19 +7,15 @@ import re
 from bson.objectid import ObjectId
 
 def slugify(text):
-    """
-    Convert a text string into a slug format.
-    """
+    """Convert a text string into a slug format."""
     if not isinstance(text, str):
         text = str(text)
-    
     text = text.lower()
     text = unicodedata.normalize('NFKD', text)
     text = text.encode('ascii', 'ignore').decode('utf-8')
     text = re.sub(r'[^a-z0-9]+', '-', text)
     text = text.strip('-')
     text = re.sub(r'-+', '-', text)
-    
     return text
 
 def convert_objectid_to_str(documents):
@@ -37,12 +33,7 @@ def normalize_string(text):
     return text
 
 def standardize_po_number(df, po_column):
-    """
-    Standardize PO numbers to Int64 format by:
-    1. Removing non-numeric characters
-    2. Converting to Int64
-    3. Handling null values
-    """
+    """Standardize PO numbers to Int64 format by removing non-numeric characters."""
     try:
         return df.with_columns([
             pl.when(pl.col(po_column).is_null())
@@ -59,7 +50,7 @@ def standardize_po_number(df, po_column):
     except Exception as e:
         st.warning(f"Warning: Could not standardize column {po_column}: {e}")
         return df
-    
+
 @st.cache_data
 def mongo_collection_to_polars(mongo_uri, db_name, collection_name):
     try:
@@ -72,7 +63,7 @@ def mongo_collection_to_polars(mongo_uri, db_name, collection_name):
         if not documents:
             return pl.DataFrame()
         
-        polars_df = pl.DataFrame(documents, infer_schema_length=1000)
+        polars_df = pl.DataFrame(documents)
         return polars_df
     except Exception as e:
         st.error(f"Error loading collection {collection_name}: {e}")
@@ -91,7 +82,7 @@ class DataFilterApp:
         self.password = 'dD@pjl06081420'
         self.cluster = 'cluster0.akbb8.mongodb.net'
         self.db_name = 'warehouse'
-        self.collections = ['merged_data', 'merged_nfspdf', 'po']
+        self.collections = ['xml', 'po', 'nfspdf']
         
         self.mongo_uri = self._get_mongo_uri()
         self._setup_page()
@@ -114,105 +105,63 @@ class DataFilterApp:
             layout="wide",
             initial_sidebar_state="collapsed"
         )
-        
-    def _clean_po_number(self, df, po_column):
-        """Clean PO numbers by removing non-numeric characters and .0 suffix"""
-        try:
-            return df.with_columns([
-                pl.when(pl.col(po_column).is_null())
-                .then(pl.lit(""))
-                .otherwise(
-                    pl.col(po_column).cast(pl.Utf8)
-                    .str.replace_all(r'[^\d]', '')
-                    .str.replace(r'\.0$', '')
-                )
-                .alias(f"{po_column}_cleaned")
-            ])
-        except Exception as e:
-            st.warning(f"Warning: Could not clean column {po_column}: {e}")
-            # If cleaning fails, create an empty cleaned column
-            return df.with_columns(pl.lit("").alias(f"{po_column}_cleaned"))
 
     def _load_and_merge_collections(self):
         with st.spinner("Loading and merging data..."):
             try:
-                # Load XML collection
                 xml_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'xml')
-                # Load PO collection
                 po_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'po')
-                po_df = po_df.unique(subset=['Purchasing Document'])
-
-                # Check if XML and PO have data
-                if not xml_df.is_empty() and not po_df.is_empty():
-                    # Standardize 'po' column in XML
-                    xml_df = xml_df.with_columns([
-                        pl.col('po').cast(pl.Utf8).str.replace_all(r'\D', '').alias('po_cleaned')
-                    ])
-                    # Remove '.0' from the end of 'po' values after converting to string
-                    xml_df = xml_df.with_columns([
-                        pl.col('po').cast(pl.Utf8)  # Convert to string
-                        .str.replace(r'\.0$', '')    # Remove the '.0' at the end of values
-                        .alias('po_cleaned')         # Column for the join
-                    ])
-                    # Standardize 'Purchasing Document' column in PO
-                    po_df = po_df.with_columns([
-                        pl.col('Purchasing Document').cast(pl.Utf8).str.replace_all(r'\D', '').alias('Purchasing Document_cleaned')
-                    ])
-                    
-                    # Filter specific columns from PO for the join
-                    po_df = po_df.select([
-                        'Purchasing Document_cleaned',
-                        'Project Code',
-                        'Andritz WBS Element',
-                        'Cost Center'
-                    ])
-
-                    # Perform the join between XML and PO using the standardized columns
-                    merged_xml_po = xml_df.join(
-                        po_df,
-                        left_on='po_cleaned',
-                        right_on='Purchasing Document_cleaned',
-                        how='left'
-                    ).sort(by=['dtEmi', 'nNf', 'itemNf'], descending=[True, False, False])
-
-                    self.dataframes['merged_data'] = merged_xml_po
-
-                else:
-                    st.error("XML or PO is empty.")
-                    self.dataframes['merged_data'] = pl.DataFrame()
-
-                # Load NFSPDF collection
                 nfspdf_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'nfspdf')
-                if not nfspdf_df.is_empty() and not po_df.is_empty():
-                    # Standardize 'po' column in NFSPDF
-                    po_column_name = 'po' if 'po' in nfspdf_df.columns else None
-                    if po_column_name:
-                        nfspdf_df = nfspdf_df.with_columns([
-                            pl.col(po_column_name).cast(pl.Utf8).str.replace_all(r'\D', '').alias('po_cleaned')
-                        ])
-
-                        # Perform the join between NFSPDF and PO using the standardized columns
-                        merged_nfspdf_po = nfspdf_df.join(
-                            po_df,
-                            left_on='po_cleaned',
-                            right_on='Purchasing Document_cleaned',
-                            how='left'
-                        ).sort(by=['Data Emissão'], descending=True)
-
-                        self.dataframes['merged_nfspdf'] = merged_nfspdf_po
-
-                    else:
-                        st.warning("PO column not found in the NFSPDF collection.")
-                        self.dataframes['merged_nfspdf'] = nfspdf_df
                 
-                # Load PO collection
+                merged_xml_po = self._merge_xml_and_po(xml_df, po_df)
+                merged_nfspdf_po = self._merge_nfspdf_and_po(nfspdf_df, po_df)
+                
+                self.dataframes['merged_data'] = merged_xml_po
+                self.dataframes['merged_nfspdf'] = merged_nfspdf_po
                 self.dataframes['po'] = po_df
-
+            
             except Exception as e:
                 st.error(f"Error loading and merging collections: {str(e)}")
                 self.dataframes['merged_data'] = pl.DataFrame()
                 self.dataframes['merged_nfspdf'] = pl.DataFrame()
                 self.dataframes['po'] = pl.DataFrame()
+
+    def _merge_xml_and_po(self, xml_df, po_df):
+        xml_df = self._standardize_po_column(xml_df, 'po')
+        po_df = self._standardize_po_column(po_df, 'Purchasing Document')
+        
+        po_df = po_df.select([
+            'Purchasing Document_cleaned',
+            'Project Code',
+            'Andritz WBS Element',
+            'Cost Center'
+        ])
+        
+        return xml_df.join(
+            po_df,
+            left_on='po_cleaned',
+            right_on='Purchasing Document_cleaned',
+            how='left'
+        ).sort(by=['dtEmi', 'nNf', 'itemNf'], descending=[True, False, False])
+
+    def _merge_nfspdf_and_po(self, nfspdf_df, po_df):
+        nfspdf_df = self._standardize_po_column(nfspdf_df, 'po')
+        
+        return nfspdf_df.join(
+            po_df,
+            left_on='po_cleaned',
+            right_on='Purchasing Document_cleaned',
+            how='left'
+        ).sort(by=['Data Emissão'], descending=True)
+
+    def _standardize_po_column(self, df, po_column_name):
+        try:
+            return df.with_columns([
+                pl.col(po_column_name).cast(pl.Utf8).str.replace_all(r'\D', '').alias(f"{po_column_name}_cleaned")
+            ])
+        except Exception as e:
+            st.warning(f"Warning: Could not standardize column {po_column_name}: {e}")
+            return df
 
     def _create_filters(self, df, collection_name):
         if df.is_empty():
@@ -304,7 +253,11 @@ class DataFilterApp:
 
     def run(self):
         st.title("📊 MongoDB Dashboard")
-
+        
+        if st.button("Atualizar DataFrames"):
+            mongo_collection_to_polars.clear()
+            self._load_and_merge_collections()
+            st.success("DataFrames atualizados e cache limpo com sucesso!")
 
         tabs = st.tabs(["🆕 Merged Data", "🗃️ NFSPDF", "📄 PO"])
         
@@ -333,7 +286,7 @@ class DataFilterApp:
                     st.dataframe(
                         filtered_df.to_pandas(),
                         use_container_width=True,
-                        height=600
+                        hide_index=True
                     )
 
 if __name__ == "__main__":
