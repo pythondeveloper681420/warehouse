@@ -3,9 +3,10 @@ import pandas as pd
 from pymongo import MongoClient, errors
 import urllib.parse
 import numpy as np
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 import time as time_module
 from contextlib import contextmanager
+import itertools
 import dns.resolver
 dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
 dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4'] 
@@ -67,8 +68,8 @@ CLUSTER = 'cluster0.akbb8.mongodb.net'
 DB_NAME = 'warehouse'
 MAX_RETRIES = 5
 RETRY_DELAY = 3
-CONNECTION_TIMEOUT = 5000
-SOCKET_TIMEOUT = 10000
+CONNECTION_TIMEOUT = 30000    # 30 segundos
+SOCKET_TIMEOUT = 45000       # 45 segundos
 
 @contextmanager
 def mongodb_connection():
@@ -111,7 +112,7 @@ def mongodb_connection():
                 client.close()
 
 def handle_date(value):
-    """Função para tratar datas e horários"""
+    """Função para tratar datas e horários."""
     if pd.isna(value) or pd.isnull(value):
         return None
     if isinstance(value, pd.Timestamp):
@@ -121,23 +122,23 @@ def handle_date(value):
     return value
 
 def clean_dataframe(df):
-    """Limpa e prepara o DataFrame para inserção no MongoDB"""
+    """Limpa e prepara o DataFrame para inserção no MongoDB."""
     df_clean = df.copy()
     
-    # Adiciona creation_date automaticamente
-    df_clean['creation_date'] = datetime.utcnow()
+    # Adiciona 'creation_date' automaticamente com o timestamp UTC e timezone-aware
+    df_clean['creation_date'] = datetime.now(timezone.utc)
     
     for column in df_clean.columns:
-        if df_clean[column].dtype in ['datetime64[ns]', 'datetime64[ns, UTC]']:
+        if pd.api.types.is_datetime64_any_dtype(df_clean[column]):
             df_clean[column] = df_clean[column].apply(handle_date)
         else:
             df_clean[column] = df_clean[column].apply(lambda x: 
                 None if pd.isna(x) 
-                else int(x) if isinstance(x, np.integer)
-                else float(x) if isinstance(x, np.floating)
-                else bool(x) if isinstance(x, np.bool_)
+                else int(x) if isinstance(x, (np.integer, int))
+                else float(x) if isinstance(x, (np.floating, float))
+                else bool(x) if isinstance(x, (np.bool_, bool))
                 else x.strftime('%H:%M:%S') if isinstance(x, time)
-                else str(x) if isinstance(x, np.datetime64)
+                else str(x) if isinstance(x, (np.datetime64, datetime))
                 else x
             )
     
@@ -198,16 +199,19 @@ def get_collection_fields(collection_name):
         return []
 
 def fast_remove_duplicates(collection_name, field_name):
-    """Remove duplicatas mantendo os registros mais antigos"""
+    """Remove duplicadas mantendo os registros mais antigos com melhor gestão de timeouts"""
     try:
         with mongodb_connection() as db:
             collection = db[collection_name]
             
-            # Pipeline de agregação para identificar duplicatas
+            # Criar índice para melhorar performance
+            collection.create_index([(field_name, 1), ('creation_date', 1)])
+            
+            # Pipeline de agregação com timeout aumentado
             pipeline = [
                 {
                     "$sort": {
-                        "creation_date": 1  # Ordena por data de criação (mais antigos primeiro)
+                        "creation_date": 1
                     }
                 },
                 {
@@ -224,48 +228,97 @@ def fast_remove_duplicates(collection_name, field_name):
                 }
             ]
             
-            # Encontra documentos duplicados
-            duplicates = list(collection.aggregate(pipeline))
+            # Usar cursor para processar em lotes
+            duplicates_cursor = collection.aggregate(
+                pipeline,
+                allowDiskUse=True,
+                maxTimeMS=30000  # 30 segundos timeout
+            )
             
-            if not duplicates:
-                return True, 0, collection.count_documents({})
+            total_deleted = 0
+            batch_size = 100
             
-            # Coleta IDs dos documentos originais (mais antigos)
-            original_ids = [doc["original_id"] for doc in duplicates]
+            while True:
+                try:
+                    batch_duplicates = list(itertools.islice(duplicates_cursor, batch_size))
+                    if not batch_duplicates:
+                        break
+                        
+                    original_ids = [doc["original_id"] for doc in batch_duplicates]
+                    field_values = [doc["_id"] for doc in batch_duplicates]
+                    
+                    # Deletar duplicadas em lotes
+                    result = collection.delete_many({
+                        field_name: {"$in": field_values},
+                        "_id": {"$nin": original_ids}
+                    })
+                    
+                    total_deleted += result.deleted_count
+                    
+                except errors.ExecutionTimeout:
+                    continue  # Continua com o próximo lote em caso de timeout
+                    
+                except errors.CursorNotFound:
+                    # Recria o cursor se ele expirar
+                    duplicates_cursor = collection.aggregate(
+                        pipeline,
+                        allowDiskUse=True,
+                        maxTimeMS=30000
+                    )
+                    continue
             
-            # Remove todos os documentos duplicados exceto os mais antigos
-            result = collection.delete_many({
-                field_name: {"$in": [doc["_id"] for doc in duplicates]},
-                "_id": {"$nin": original_ids}
-            })
-            
-            return True, result.deleted_count, collection.count_documents({})
+            return True, total_deleted, collection.count_documents({})
             
     except Exception as e:
         return False, str(e), 0
 
-def batch_remove_duplicates(collection_name, field_name, batch_size=500):
-    """Remove duplicatas em lotes mantendo os registros mais antigos"""
+def batch_remove_duplicates(collection_name, field_name, batch_size=100):
+    """Remove duplicadas em lotes com melhor gestão de memória e timeouts"""
     try:
         with mongodb_connection() as db:
             collection = db[collection_name]
             
-            # Cria índice composto para o campo e creation_date
+            # Criar índice para melhorar performance
             collection.create_index([(field_name, 1), ('creation_date', 1)])
             
             duplicates_removed = 0
             processed_values = set()
             
-            # Processa em lotes
-            cursor = collection.find().sort('creation_date', 1)
+            # Processa em lotes menores com cursor
+            cursor = collection.find(
+                {},
+                {field_name: 1, '_id': 1, 'creation_date': 1}
+            ).sort('creation_date', 1).batch_size(batch_size)
             
-            for doc in cursor:
-                value = doc.get(field_name)
-                if value not in processed_values:
-                    processed_values.add(value)
-                else:
-                    collection.delete_one({'_id': doc['_id']})
-                    duplicates_removed += 1
+            while True:
+                try:
+                    batch = list(itertools.islice(cursor, batch_size))
+                    if not batch:
+                        break
+                        
+                    batch_ids_to_delete = []
+                    for doc in batch:
+                        value = doc.get(field_name)
+                        if value is not None:
+                            if value in processed_values:
+                                batch_ids_to_delete.append(doc['_id'])
+                            else:
+                                processed_values.add(value)
+                    
+                    if batch_ids_to_delete:
+                        result = collection.delete_many({'_id': {'$in': batch_ids_to_delete}})
+                        duplicates_removed += result.deleted_count
+                    
+                except errors.CursorNotFound:
+                    # Recria o cursor se ele expirar
+                    cursor = collection.find(
+                        {},
+                        {field_name: 1, '_id': 1, 'creation_date': 1}
+                    ).sort('creation_date', 1).batch_size(batch_size)
+                    continue
+                    
+                except errors.ExecutionTimeout:
+                    continue  # Continua com o próximo lote em caso de timeout
             
             return True, duplicates_removed, collection.count_documents({})
                 
@@ -342,19 +395,19 @@ def main():
                     st.error(f"Erro ao processar arquivo: {str(e)}")
         
         with tab2:
-            st.subheader("🧹 Limpeza de Duplicatas")
+            st.subheader("🧹 Limpeza de Duplicadas")
             
             clean_collection = st.text_input(
                 "Nome da Coleção para Limpeza",
                 placeholder="Digite o nome da coleção",
-                help="Nome da coleção para remover duplicatas"
+                help="Nome da coleção para remover duplicadas"
             ).strip()
             
             if clean_collection:
                 fields = get_collection_fields(clean_collection)
                 if fields:
                     selected_field = st.selectbox(
-                        "Selecione o campo para identificar duplicatas",
+                        "Selecione o campo para identificar duplicadas",
                         options=fields,
                         help="Os documentos serão considerados duplicados se tiverem o mesmo valor neste campo"
                     )
@@ -367,8 +420,8 @@ def main():
                     
                     st.info("⚠️ A limpeza manterá os registros mais antigos com base na data de criação (creation_date)")
                     
-                    if st.button("🧹 Remover Duplicatas", type="primary", use_container_width=True):
-                        with st.spinner("Removendo duplicatas..."):
+                    if st.button("🧹 Remover Duplicadas", type="primary", use_container_width=True):
+                        with st.spinner("Removendo duplicadas..."):
                             if cleaning_method == "Rápido (Memória)":
                                 success, removed_count, remaining_count = fast_remove_duplicates(
                                     clean_collection, selected_field
@@ -385,7 +438,7 @@ def main():
                                     • Documentos restantes: {remaining_count}
                                 """)
                             else:
-                                st.error(f"Erro ao remover duplicatas: {removed_count}")
+                                st.error(f"Erro ao remover duplicadas: {removed_count}")
                 else:
                     st.warning("⚠️ Nenhum campo encontrado na coleção ou coleção vazia!")
             else:
@@ -411,15 +464,15 @@ def main():
             
             3. **Data de Criação**:
             - Um campo 'creation_date' é automaticamente adicionado a cada registro
-            - Esta data é usada para controle de duplicatas e versionamento
+            - Esta data é usada para controle de duplicadas e versionamento
             """)
             
             # Seção de Limpeza de Dados
             st.markdown("### 🧹 Limpeza de Dados")
             st.markdown("""
-            1. **Remoção de Duplicatas**:
+            1. **Remoção de Duplicadas**:
             - Digite o nome da coleção que deseja limpar
-            - Selecione o campo que será usado para identificar duplicatas
+            - Selecione o campo que será usado para identificar duplicadas
             - O sistema manterá automaticamente os registros mais antigos
             - Escolha o método de limpeza:
                 * **Rápido**: Ideal para coleções menores (usa mais memória)
@@ -427,7 +480,7 @@ def main():
             
             2. **Processo de Limpeza**:
             - Confirme sua seleção
-            - Clique em "Remover Duplicatas"
+            - Clique em "Remover Duplicadas"
             - Aguarde o processo ser concluído
             - Verifique o número de documentos removidos e restantes
             """)
@@ -441,10 +494,10 @@ def main():
                     * Padronize os formatos de data
                     * Evite células vazias quando possível
                 
-                - **Gestão de Duplicatas**:
+                - **Gestão de Duplicadas**:
                     * O sistema sempre mantém os registros mais antigos
                     * Use o campo creation_date para rastrear versões
-                    * Faça backups antes de limpar duplicatas
+                    * Faça backups antes de limpar duplicadas
                 
                 - **Performance**:
                     * Para arquivos grandes, prefira o upload em horários de menor uso

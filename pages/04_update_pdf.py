@@ -7,6 +7,7 @@ from datetime import datetime
 import base64
 from io import BytesIO
 import tempfile
+import unicodedata
 
 # Set page config
 st.set_page_config(
@@ -50,6 +51,33 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+def slugify(text):
+    """
+    Convert a text string into a slug format.
+    - Convert to lowercase
+    - Remove special characters
+    - Replace spaces with hyphens
+    - Remove consecutive hyphens
+    """
+    if not isinstance(text, str):
+        text = str(text)
+    
+    # Convert to lowercase and normalize unicode characters
+    text = text.lower()
+    text = unicodedata.normalize('NFKD', text)
+    text = text.encode('ascii', 'ignore').decode('utf-8')
+    
+    # Replace any non-alphanumeric character with a hyphen
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    
+    # Remove leading and trailing hyphens
+    text = text.strip('-')
+    
+    # Replace multiple consecutive hyphens with a single hyphen
+    text = re.sub(r'-+', '-', text)
+    
+    return text
 
 def convert_brazilian_number(value):
     """Convert Brazilian number format (1.234,56) to float."""
@@ -346,9 +374,18 @@ def main():
                     dados_nf = extrair_dados_nf(pdf_file)
                     dados_extraidos.append(dados_nf)
                     progress_bar.progress((i + 1) / len(uploaded_files))
-                    
+                     
                 df_nf = pd.DataFrame(dados_extraidos)
-                df_nf['po'] = df_nf['Discriminacao do Servico'].fillna('').apply(extract_numbers)
+                
+                # Create unique identifier using slugify
+                df_nf['unique'] = df_nf['Numero NFS-e'].astype(str) + '-' + df_nf['CNPJ Prestador'].astype(str)
+                df_nf['unique'] = df_nf['unique'].apply(slugify)
+                
+                # Remove duplicates based on the slugified unique column
+                df_nf.drop_duplicates(subset='unique', inplace=True)   
+                
+                df_nf['po'] = df_nf['Discriminacao do Servico'].fillna('').apply(extract_numbers).str[:10]  
+                df_nf['po'] = df_nf['po'].apply(lambda x: x if len(x) == 10 else '')             
                 df_nf['po'] = df_nf['po'].fillna('').apply(extract_numbers)
                 
                 # Process data
@@ -372,11 +409,13 @@ def main():
 
                 st.session_state['df_nf'] = df_nf
                 
+                    # Obtendo a data e hora atual com milissegundos
+                randon = datetime.now().strftime("%d%m%Y%H%M%S") + str(datetime.now().microsecond)[:3]              
                 excel_file = to_excel(df_nf)
                 st.download_button(
                     label="📥 Baixar Excel",
                     data=base64.b64decode(excel_file),
-                    file_name="notas_fiscais_extraidas.xlsx",
+                    file_name=f'nfspdf_{randon}.xlsx',
                     mime="application/vnd.ms-excel"
                 )
 

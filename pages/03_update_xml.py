@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 import os
 import xml.etree.ElementTree as ET
-from datetime import date
+from datetime import date,datetime
 import re
 import time
 import pickle
 import numpy as np
 import io
 import unicodedata
+
 #format_date_to_brazilian
 #df['Mês']
 # Page configuration
@@ -395,13 +396,16 @@ def main():
             #df['po'] = df['po'].apply(filter_info_adic)
             df['po'] = df['po'].apply(extract_numbers)
             
-            # Função para truncar os primeiros 10 caracteres
-            def truncate_to_10_chars(text):
-                return text[:10] if text else ""
+            # Extrair apenas os números e filtrar para 10 caracteres exatos
+            df['po'] = df['po'].apply(lambda x: extract_numbers(x) if len(extract_numbers(x)) == 10 else '')
+            
+            # # Função para truncar os primeiros 10 caracteres
+            # def truncate_to_10_chars(text):
+            #     return text[:10] if text else ""
 
-            df['po'] = df['po'].apply(truncate_to_10_chars)
-
-
+            # df['po'] = df['po'].apply(truncate_to_10_chars)
+            # df['po'] = df['po'].apply(lambda x: x if len(x) == 10 else '') 
+            
             # Função para obter o primeiro valor não vazio para cada 'chaveNfe'
             def get_first_non_empty_po(df):
                 first_non_empty_po = {}
@@ -819,6 +823,8 @@ def main():
 
             def convert_df_to_pickle(df):
                 return pickle.dumps(df)
+            
+            randon = datetime.now().strftime("%d%m%Y%H%M%S") + str(datetime.now().microsecond)[:3]
 
             col1, col2 = st.columns(2)
             
@@ -827,7 +833,7 @@ def main():
                 st.download_button(
                     label="Download Excel",
                     data=excel_file,
-                    file_name="processed_invoices.xlsx",
+                    file_name=f"NFSXML_{randon}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
