@@ -6,469 +6,150 @@ import unicodedata
 import re
 from bson.objectid import ObjectId
 from datetime import datetime, timedelta
-import time
 import pytz
 
-#infer_and_convert_types
-
-def slugify(text):
-    """
-    Convert a text string into a slug format.
-    """
-    if not isinstance(text, str):
-        text = str(text)
-    
-    text = text.lower()
-    text = unicodedata.normalize('NFKD', text)
-    text = text.encode('ascii', 'ignore').decode('utf-8')
-    text = re.sub(r'[^a-z0-9]+', '-', text)
-    text = text.strip('-')
-    text = re.sub(r'-+', '-', text)
-    
-    return text
-
-def convert_objectid_to_str(documents):
-    for document in documents:
-        for key, value in document.items():
-            if isinstance(value, ObjectId):
-                document[key] = str(value)
-    return documents
+def setup_page():
+    """Configure a página do Streamlit"""
+    st.set_page_config(
+        page_title="Dashboard MongoDB",
+        page_icon="📊",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
 
 def normalize_string(text):
+    """Normaliza uma string removendo acentos e caracteres especiais"""
     if not isinstance(text, str):
         return str(text)
     text = unicodedata.normalize('NFKD', text)
-    text = re.sub(r'[^\w\s]', '', text)
-    return text
+    return re.sub(r'[^\w\s]', '', text)
 
-def standardize_po_number(df, po_column):
-    """
-    Standardize PO numbers to Int64 format by:
-    1. Removing non-numeric characters
-    2. Converting to Int64
-    3. Handling null values
-    """
-    try:
-        return df.with_columns([
-            pl.when(pl.col(po_column).is_null())
-            .then(None)
-            .otherwise(
-                pl.col(po_column)
-                .cast(pl.Utf8)
-                .str.replace_all(r'[^\d]', '')  # Remove non-numeric chars
-                .str.replace(r'\.0$', '')       # Remove .0 suffix
-                .cast(pl.Int64)                 # Convert to Int64
-            )
-            .alias(po_column)
-        ])
-    except Exception as e:
-        st.warning(f"Warning: Could not standardize column {po_column}: {e}")
-        return df
-    
-def infer_and_convert_types(documents):
-    """
-    Infer and standardize types for MongoDB documents before converting to Polars DataFrame.
-    """
-    if not documents:
-        return documents
-    
-    # Sample a subset of documents for type inference
-    sample_size = min(100, len(documents))
-    sample_docs = documents[:sample_size]
-    
-    # Initialize type mapping
-    type_mapping = {}
-    
-    # Analyze sample documents to infer types
-    for doc in sample_docs:
-        for key, value in doc.items():
-            if key not in type_mapping:
-                type_mapping[key] = set()
-            if value is not None:
-                type_mapping[key].add(type(value))
-    
-    # Convert documents based on inferred types
+def convert_objectid_to_str(documents):
+    """Converte ObjectId para string em documentos MongoDB"""
     for doc in documents:
-        for key, type_set in type_mapping.items():
-            if key not in doc or doc[key] is None:
-                continue
-                
-            # Handle datetime fields
-            if datetime in type_set:
-                if isinstance(doc[key], str):
-                    try:
-                        # Try parsing with timezone
-                        doc[key] = datetime.fromisoformat(doc[key].replace('Z', '+00:00'))
-                    except ValueError:
-                        try:
-                            # Try common datetime formats
-                            formats = [
-                                '%Y-%m-%d %H:%M:%S',
-                                '%Y-%m-%d',
-                                '%d/%m/%Y %H:%M:%S',
-                                '%d/%m/%Y'
-                            ]
-                            for fmt in formats:
-                                try:
-                                    doc[key] = datetime.strptime(doc[key], fmt)
-                                    break
-                                except ValueError:
-                                    continue
-                        except Exception:
-                            # If parsing fails, keep as string
-                            pass
-            
-            # Handle numeric fields
-            elif str in type_set and any(t in type_set for t in (int, float)):
-                try:
-                    if isinstance(doc[key], str):
-                        # Remove any non-numeric characters except decimal point
-                        cleaned = ''.join(c for c in doc[key] if c.isdigit() or c == '.')
-                        if cleaned:
-                            if '.' in cleaned:
-                                doc[key] = float(cleaned)
-                            else:
-                                doc[key] = int(cleaned)
-                except ValueError:
-                    pass
-    
+        for key, value in doc.items():
+            if isinstance(value, ObjectId):
+                doc[key] = str(value)
     return documents
 
 @st.cache_data
-def mongo_collection_to_polars(mongo_uri, db_name, collection_name):
+def load_mongodb_data(mongo_uri, db_name, collection_name):
+    """Carrega dados do MongoDB e converte para DataFrame Polars"""
     try:
         client = MongoClient(mongo_uri)
         db = client[db_name]
         collection = db[collection_name]
         
-        # Fetch documents
         documents = list(collection.find())
-        
-        # Convert ObjectIds to strings
         documents = convert_objectid_to_str(documents)
-        
-        # Infer and convert types
-        documents = infer_and_convert_types(documents)
         
         if not documents:
             return pl.DataFrame()
         
-        # Create DataFrame with increased schema inference length
-        polars_df = pl.DataFrame(
-            documents,
-            infer_schema_length=None  # Use all rows for schema inference
-        )
-        
-        return polars_df
-    
+        return pl.DataFrame(documents)
     except Exception as e:
-        st.error(f"Error loading collection {collection_name}: {str(e)}")
+        st.error(f"Erro ao carregar coleção {collection_name}: {str(e)}")
         return pl.DataFrame()
+
+class FilterManager:
+    """Gerencia a criação e aplicação de filtros nos dados"""
     
-def get_unique_values(_df, column):
-    try:
-        return _df[column].unique().to_list()
-    except:
-        return []
-
-
-class DataFilterApp:
-    def __init__(self):
-        self.username = 'devpython86'
-        self.password = 'dD@pjl06081420'
-        self.cluster = 'cluster0.akbb8.mongodb.net'
-        self.db_name = 'warehouse'
-        self.collections = ['merged_data', 'merged_nfspdf', 'po']
-        
-        self.mongo_uri = self._get_mongo_uri()
-        self._setup_page()
-        
-        # Initialize session state variables
-        if 'last_refresh' not in st.session_state:
-            st.session_state.last_refresh = datetime.now()
-        if 'auto_refresh' not in st.session_state:
-            st.session_state.auto_refresh = False
-        if 'filters' not in st.session_state:
-            st.session_state.filters = {collection: {} for collection in self.collections}
-        
-        self.dataframes = {}
-        self._init_data()
-
-    def _get_mongo_uri(self):
-        escaped_username = urllib.parse.quote_plus(self.username)
-        escaped_password = urllib.parse.quote_plus(self.password)
-        return f"mongodb+srv://{escaped_username}:{escaped_password}@{self.cluster}/{self.db_name}?retryWrites=true&w=majority"
-
-    def _setup_page(self):
-        st.set_page_config(
-            page_title="Dashboard MongoDB",
-            page_icon="📊",
-            layout="wide",
-            initial_sidebar_state="collapsed"
-        )
-
-    def _init_data(self):
-        current_time = datetime.now()
-        if (st.session_state.auto_refresh and 
-            current_time - st.session_state.last_refresh >= timedelta(minutes=10)):
-            self._load_and_merge_collections()
-            st.session_state.last_refresh = current_time
-        elif not self.dataframes:
-            self._load_and_merge_collections()
-
-    def refresh_data(self):
-        with st.spinner("Refreshing data..."):
-            self._load_and_merge_collections()
-            st.session_state.last_refresh = datetime.now()
-            st.success("Data refreshed successfully!")
-
-    def _create_refresh_controls(self):
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-        
-        with col1:
-            if st.button("🔄 Refresh Data", use_container_width=True):
-                self.refresh_data()
-        
-        with col2:
-            st.session_state.auto_refresh = st.toggle(
-                "Auto-refresh (10 min)",
-                value=st.session_state.auto_refresh
-            )
-        
-        with col3:
-            last_refresh_str = st.session_state.last_refresh.strftime("%Y-%m-%d %H:%M:%S")
-            st.caption(f"Last refresh: {last_refresh_str}")
-        
-        with col4:
-            if st.session_state.auto_refresh:
-                next_refresh = st.session_state.last_refresh + timedelta(minutes=10)
-                next_refresh_str = next_refresh.strftime("%Y-%m-%d %H:%M:%S")
-                st.caption(f"Next refresh: {next_refresh_str}")
-        
-    def _clean_po_number(self, df, po_column):
-        """Clean PO numbers by removing non-numeric characters and .0 suffix"""
-        try:
-            return df.with_columns([
-                pl.when(pl.col(po_column).is_null())
-                .then(pl.lit(""))
-                .otherwise(
-                    pl.col(po_column).cast(pl.Utf8)
-                    .str.replace_all(r'[^\d]', '')
-                    .str.replace(r'\.0$', '')
-                )
-                .alias(f"{po_column}_cleaned")
-            ])
-        except Exception as e:
-            st.warning(f"Warning: Could not clean column {po_column}: {e}")
-            # If cleaning fails, create an empty cleaned column
-            return df.with_columns(pl.lit("").alias(f"{po_column}_cleaned"))
-
-    def _load_and_merge_collections(self):
-        with st.spinner("Loading and merging data..."):
-            try:
-                # Load XML collection
-                xml_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'xml')
-                # Load PO collection
-                po_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'po')
-                po_df = po_df.unique(subset=['Purchasing Document'])
-
-                # Check if XML and PO have data
-                if not xml_df.is_empty() and not po_df.is_empty():
-                    # Standardize 'po' column in XML
-                    xml_df = xml_df.with_columns([
-                        pl.col('po').cast(pl.Utf8).str.replace_all(r'\D', '').alias('po_cleaned')
-                    ])
-                    # Remove '.0' from the end of 'po' values after converting to string
-                    xml_df = xml_df.with_columns([
-                        pl.col('po').cast(pl.Utf8)  # Convert to string
-                        .str.replace(r'\.0$', '')    # Remove the '.0' at the end of values
-                        .alias('po_cleaned')         # Column for the join
-                    ])
-                    # Standardize 'Purchasing Document' column in PO
-                    po_df = po_df.with_columns([
-                        pl.col('Purchasing Document').cast(pl.Utf8).str.replace_all(r'\D', '').alias('Purchasing Document_cleaned')
-                    ])
-                    
-                    # Filter specific columns from PO for the join
-                    po_df = po_df.select([
-                        'Purchasing Document_cleaned',
-                        'Project Code',
-                        'Andritz WBS Element',
-                        'Cost Center'
-                    ])
-
-                    # Perform the join between XML and PO using the standardized columns
-                    merged_xml_po = xml_df.join(
-                        po_df,
-                        left_on='po_cleaned',
-                        right_on='Purchasing Document_cleaned',
-                        how='left'
-                    ).sort(by=['dtEmi', 'nNf', 'itemNf'], descending=[True, False, False])
-
-                    self.dataframes['merged_data'] = merged_xml_po
-
-                else:
-                    st.error("XML or PO is empty.")
-                    self.dataframes['merged_data'] = pl.DataFrame()
-
-                # Load NFSPDF collection
-                nfspdf_df = mongo_collection_to_polars(self.mongo_uri, self.db_name, 'nfspdf')
-                if not nfspdf_df.is_empty() and not po_df.is_empty():
-                    # Standardize 'po' column in NFSPDF
-                    po_column_name = 'po' if 'po' in nfspdf_df.columns else None
-                    if po_column_name:
-                        nfspdf_df = nfspdf_df.with_columns([
-                            pl.col(po_column_name).cast(pl.Utf8).str.replace_all(r'\D', '').alias('po_cleaned')
-                        ])
-
-                        # Perform the join between NFSPDF and PO using the standardized columns
-                        merged_nfspdf_po = nfspdf_df.join(
-                            po_df,
-                            left_on='po_cleaned',
-                            right_on='Purchasing Document_cleaned',
-                            how='left'
-                        ).sort(by=['Data Emissão'], descending=True)
-
-                        self.dataframes['merged_nfspdf'] = merged_nfspdf_po
-
-                    else:
-                        st.warning("PO column not found in the NFSPDF collection.")
-                        self.dataframes['merged_nfspdf'] = nfspdf_df
-                
-                # Load PO collection
-                self.dataframes['po'] = po_df
-
-            except Exception as e:
-                st.error(f"Error loading and merging collections: {str(e)}")
-                self.dataframes['merged_data'] = pl.DataFrame()
-                self.dataframes['merged_nfspdf'] = pl.DataFrame()
-                self.dataframes['po'] = pl.DataFrame()
-
-    def _create_filters(self, df, collection_name):
+    def __init__(self, collection_name):
+        self.collection_name = collection_name
+        self._init_session_state()
+    
+    def _init_session_state(self):
+        """Inicializa variáveis de estado da sessão"""
+        base_key = f"filter_state_{self.collection_name}"
+        if base_key not in st.session_state:
+            st.session_state[base_key] = {
+                'selected_columns': [],
+                'filters': {}
+            }
+    
+    def _get_filter_key(self, column, filter_type):
+        """Gera uma chave única para cada filtro"""
+        return f"filter_{self.collection_name}_{column}_{filter_type}"
+    
+    def create_filters(self, df):
+        """Cria interface de filtros para o DataFrame"""
         if df.is_empty():
-            st.error("No data available to filter")
+            st.error("Sem dados disponíveis para filtrar")
             return {}
         
-        # Initialize collection filters if not exists
-        if collection_name not in st.session_state.filters:
-            st.session_state.filters[collection_name] = {}
+        state = st.session_state[f"filter_state_{self.collection_name}"]
         
-        filters = st.session_state.filters[collection_name]
-        columns = df.columns
-        
-        # Store selected columns in session state
-        if f"selected_columns_{collection_name}" not in st.session_state:
-            st.session_state[f"selected_columns_{collection_name}"] = []
-            
+        # Seleção de colunas
         selected_columns = st.multiselect(
-            "Select columns to filter:",
-            columns,
-            default=st.session_state[f"selected_columns_{collection_name}"],
-            key=f"cols_{collection_name}"
+            "Selecione as colunas para filtrar:",
+            df.columns,
+            default=state['selected_columns'],
+            key=f"cols_{self.collection_name}"
         )
+        state['selected_columns'] = selected_columns
         
-        st.session_state[f"selected_columns_{collection_name}"] = selected_columns
-        
+        filters = {}
         for column in selected_columns:
             st.markdown(f"### {column}")
             column_type = df[column].dtype
             
-            # Create unique key for filter type
-            filter_type_key = f"type_{collection_name}_{column}"
-            if filter_type_key not in st.session_state:
-                st.session_state[filter_type_key] = "Input"
-            
             if column_type == pl.Utf8:
                 filter_type = st.radio(
-                    "Filter type:",
-                    ["Input", "Multi-select"],
-                    key=filter_type_key,
-                    horizontal=True,
-                    index=0 if st.session_state[filter_type_key] == "Input" else 1
+                    "Tipo de filtro:",
+                    ["Texto", "Multi-seleção"],
+                    key=self._get_filter_key(column, "type"),
+                    horizontal=True
                 )
                 
-                st.session_state[filter_type_key] = filter_type
-                
-                if filter_type == "Input":
-                    # Create unique key for input value
-                    input_key = f"input_{collection_name}_{column}"
-                    if input_key not in st.session_state:
-                        st.session_state[input_key] = ""
-                        
+                if filter_type == "Texto":
                     value = st.text_input(
-                        "Enter value:",
-                        value=st.session_state[input_key],
-                        key=input_key
+                        "Digite o valor:",
+                        key=self._get_filter_key(column, "text")
                     )
-                    
                     if value:
-                        filters[column] = ("input", value)
-                    elif column in filters:
-                        del filters[column]
+                        filters[column] = ("text", value)
                 else:
-                    # Create unique key for multiselect values
-                    multi_key = f"multi_{collection_name}_{column}"
-                    if multi_key not in st.session_state:
-                        st.session_state[multi_key] = []
-                        
-                    unique_values = get_unique_values(df, column)
+                    unique_values = df[column].unique().sort().to_list()
                     values = st.multiselect(
-                        "Select values:",
+                        "Selecione os valores:",
                         unique_values,
-                        default=st.session_state[multi_key],
-                        key=multi_key
+                        key=self._get_filter_key(column, "multi")
                     )
-                    
-                    st.session_state[multi_key] = values
-                    
                     if values:
                         filters[column] = ("multi", values)
-                    elif column in filters:
-                        del filters[column]
             
             elif column_type in [pl.Int64, pl.Float64]:
-                # Create unique key for numeric multiselect
-                range_key = f"range_{collection_name}_{column}"
-                if range_key not in st.session_state:
-                    st.session_state[range_key] = []
-                    
                 unique_values = sorted(df[column].unique().to_list())
                 values = st.multiselect(
-                    f"Select values for {column}:",
+                    f"Selecione os valores para {column}:",
                     unique_values,
-                    default=st.session_state[range_key],
-                    key=range_key
+                    key=self._get_filter_key(column, "numeric")
                 )
-                
-                st.session_state[range_key] = values
-                
                 if values:
                     filters[column] = ("multi", values)
-                elif column in filters:
-                    del filters[column]
         
+        state['filters'] = filters
         return filters
-
-    def _apply_filters(self, df, filters):
+    
+    def apply_filters(self, df, filters):
+        """Aplica os filtros ao DataFrame"""
         if not filters:
             return df
         
         filtered_df = df
-        
         for column, (filter_type, value) in filters.items():
             if column not in filtered_df.columns:
                 continue
-                
-            column_type = filtered_df[column].dtype
             
-            if filter_type == "input" and column_type == pl.Utf8:
+            if filter_type == "text":
                 normalized_value = normalize_string(value.strip().lower())
                 words = normalized_value.split()
                 pattern = ".*" + ".*".join(words) + ".*"
                 
                 filtered_df = filtered_df.with_columns([
-                    pl.col(column).cast(pl.Utf8).str.to_lowercase()
-                    .str.replace_all(r'[^\w\s]', '', literal=False)
+                    pl.col(column).cast(pl.Utf8)
+                    .str.to_lowercase()
+                    .str.replace_all(r'[^\w\s]', '')
                     .alias(f"{column}_normalized")
                 ])
                 filtered_df = filtered_df.filter(
@@ -481,15 +162,170 @@ class DataFilterApp:
         
         return filtered_df
 
+class DataMerger:
+    """Gerencia a mesclagem de dados entre coleções"""
+    
+    def __init__(self, mongo_uri, db_name):
+        self.mongo_uri = mongo_uri
+        self.db_name = db_name
+    
+    def merge_collections(self):
+        """Mescla as coleções XML, PO e NFSPDF"""
+        # Carrega coleções
+        xml_df = load_mongodb_data(self.mongo_uri, self.db_name, 'xml')
+        po_df = load_mongodb_data(self.mongo_uri, self.db_name, 'po')
+        nfspdf_df = load_mongodb_data(self.mongo_uri, self.db_name, 'nfspdf')
+        
+        results = {}
+        
+        # Processa e mescla XML com PO
+        if not xml_df.is_empty() and not po_df.is_empty():
+            po_df = po_df.unique(subset=['Purchasing Document'])
+            
+            # Padroniza colunas para join
+            xml_df = xml_df.with_columns([
+                pl.col('po').cast(pl.Utf8)
+                .str.replace_all(r'\D', '')
+                .str.replace(r'\.0$', '')
+                .alias('po_cleaned')
+            ])
+            
+            po_df = po_df.with_columns([
+                pl.col('Purchasing Document').cast(pl.Utf8)
+                .str.replace_all(r'\D', '')
+                .alias('po_cleaned')
+            ])
+            
+            # Seleciona colunas relevantes do PO
+            po_join_df = po_df.select([
+                'po_cleaned',
+                'Project Code',
+                'Andritz WBS Element',
+                'Cost Center'
+            ])
+            
+            # Realiza o join
+            merged_xml_po = xml_df.join(
+                po_join_df,
+                left_on='po_cleaned',
+                right_on='po_cleaned',
+                how='left'
+            ).sort(['dtEmi', 'nNf', 'itemNf'], descending=[True, False, False])
+            
+            results['merged_data'] = merged_xml_po
+        else:
+            results['merged_data'] = pl.DataFrame()
+        
+        # Processa e mescla NFSPDF com PO
+        if not nfspdf_df.is_empty() and not po_df.is_empty():
+            if 'po' in nfspdf_df.columns:
+                nfspdf_df = nfspdf_df.with_columns([
+                    pl.col('po').cast(pl.Utf8)
+                    .str.replace_all(r'\D', '')
+                    .alias('po_cleaned')
+                ])
+                
+                merged_nfspdf_po = nfspdf_df.join(
+                    po_join_df,
+                    left_on='po_cleaned',
+                    right_on='po_cleaned',
+                    how='left'
+                ).sort(['Data Emissão'], descending=True)
+                
+                results['merged_nfspdf'] = merged_nfspdf_po
+            else:
+                results['merged_nfspdf'] = nfspdf_df
+        else:
+            results['merged_nfspdf'] = pl.DataFrame()
+        
+        results['po'] = po_df
+        return results
+
+class Dashboard:
+    """Classe principal do Dashboard"""
+    
+    def __init__(self):
+        self.username = 'devpython86'
+        self.password = 'dD@pjl06081420'
+        self.cluster = 'cluster0.akbb8.mongodb.net'
+        self.db_name = 'warehouse'
+        self.collections = ['merged_data', 'merged_nfspdf', 'po']
+        
+        self.mongo_uri = self._get_mongo_uri()
+        self._init_session_state()
+        
+        self.data_merger = DataMerger(self.mongo_uri, self.db_name)
+        self.filter_managers = {
+            collection: FilterManager(collection)
+            for collection in self.collections
+        }
+        
+        self.dataframes = {}
+    
+    def _get_mongo_uri(self):
+        """Gera URI de conexão do MongoDB"""
+        escaped_username = urllib.parse.quote_plus(self.username)
+        escaped_password = urllib.parse.quote_plus(self.password)
+        return f"mongodb+srv://{escaped_username}:{escaped_password}@{self.cluster}/{self.db_name}?retryWrites=true&w=majority"
+    
+    def _init_session_state(self):
+        """Inicializa variáveis de estado da sessão"""
+        if 'last_refresh' not in st.session_state:
+            st.session_state.last_refresh = datetime.now()
+        if 'auto_refresh' not in st.session_state:
+            st.session_state.auto_refresh = False
+    
+    def _create_refresh_controls(self):
+        """Cria controles de atualização dos dados"""
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+        
+        with col1:
+            if st.button("🔄 Atualizar Dados", use_container_width=True):
+                self.refresh_data()
+        
+        with col2:
+            st.session_state.auto_refresh = st.toggle(
+                "Auto-atualização (10 min)",
+                value=st.session_state.auto_refresh
+            )
+        
+        with col3:
+            last_refresh_str = st.session_state.last_refresh.strftime("%Y-%m-%d %H:%M:%S")
+            st.caption(f"Última atualização: {last_refresh_str}")
+        
+        with col4:
+            if st.session_state.auto_refresh:
+                next_refresh = st.session_state.last_refresh + timedelta(minutes=10)
+                next_refresh_str = next_refresh.strftime("%Y-%m-%d %H:%M:%S")
+                st.caption(f"Próxima atualização: {next_refresh_str}")
+    
+    def refresh_data(self):
+        """Atualiza os dados do dashboard"""
+        with st.spinner("Atualizando dados..."):
+            self.dataframes = self.data_merger.merge_collections()
+            st.session_state.last_refresh = datetime.now()
+            st.success("Dados atualizados com sucesso!")
+    
+    def _check_auto_refresh(self):
+        """Verifica se é necessário atualizar os dados automaticamente"""
+        if (st.session_state.auto_refresh and 
+            datetime.now() - st.session_state.last_refresh >= timedelta(minutes=10)):
+            self.refresh_data()
+    
     def run(self):
-        st.title("📊 MongoDB Dashboard")
+        """Executa o dashboard"""
+        setup_page()
+        st.title("📊 Dashboard MongoDB")
         
         self._create_refresh_controls()
         st.divider()
         
-        if st.session_state.auto_refresh:
-            self._init_data()
-
+        # Inicializa ou atualiza dados
+        if not self.dataframes:
+            self.refresh_data()
+        self._check_auto_refresh()
+        
+        # Cria tabs para cada coleção
         tabs = st.tabs(["🆕 Merged Data", "🗃️ NFSPDF", "📄 PO"])
         
         for tab, collection_name in zip(tabs, self.collections):
@@ -497,30 +333,30 @@ class DataFilterApp:
                 df = self.dataframes[collection_name]
                 
                 if df.is_empty():
-                    st.error(f"No data found in collection {collection_name}")
+                    st.error(f"Nenhum dado encontrado na coleção {collection_name}")
                     continue
                 
                 col1, col2 = st.columns([1, 4])
                 
                 with col1:
-                    st.metric("Total Records", len(df))
+                    st.metric("Total de Registros", len(df))
                     
-                    filters = self._create_filters(df, collection_name)
-                    st.session_state.filters[collection_name] = filters
+                    filter_manager = self.filter_managers[collection_name]
+                    filters = filter_manager.create_filters(df)
                     
                     if filters:
-                        filtered_df = self._apply_filters(df, filters)
-                        st.metric("Filtered Records", len(filtered_df))
+                        filtered_df = filter_manager.apply_filters(df, filters)
+                        st.metric("Registros Filtrados", len(filtered_df))
                     else:
                         filtered_df = df
-                    
+                
                 with col2:
                     st.dataframe(
                         filtered_df.to_pandas().set_index(filtered_df.columns[0]),
                         use_container_width=True,
-                        hide_index=True,
+                        hide_index=True
                     )
 
 if __name__ == "__main__":
-    app = DataFilterApp()
-    app.run()
+    dashboard = Dashboard()
+    dashboard.run()
