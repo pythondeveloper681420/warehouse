@@ -420,7 +420,7 @@ class DataFilterApp:
                     
                 with col2:
                     st.dataframe(
-                        filtered_df.to_pandas().set_index(filtered_df.columns[0]),
+                        filtered_df.to_pandas(),
                         use_container_width=True,
                         hide_index=True,
                     )

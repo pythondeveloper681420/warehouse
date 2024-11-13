@@ -5,10 +5,6 @@ import urllib.parse
 import unicodedata
 import re
 from bson.objectid import ObjectId
-from datetime import datetime, timedelta
-import time
-
-#infer_and_convert_types
 
 def slugify(text):
     """
@@ -64,112 +60,25 @@ def standardize_po_number(df, po_column):
         st.warning(f"Warning: Could not standardize column {po_column}: {e}")
         return df
     
-import streamlit as st
-import polars as pl
-from pymongo import MongoClient
-from datetime import datetime
-import pytz
-
-def infer_and_convert_types(documents):
-    """
-    Infer and standardize types for MongoDB documents before converting to Polars DataFrame.
-    """
-    if not documents:
-        return documents
-    
-    # Sample a subset of documents for type inference
-    sample_size = min(100, len(documents))
-    sample_docs = documents[:sample_size]
-    
-    # Initialize type mapping
-    type_mapping = {}
-    
-    # Analyze sample documents to infer types
-    for doc in sample_docs:
-        for key, value in doc.items():
-            if key not in type_mapping:
-                type_mapping[key] = set()
-            if value is not None:
-                type_mapping[key].add(type(value))
-    
-    # Convert documents based on inferred types
-    for doc in documents:
-        for key, type_set in type_mapping.items():
-            if key not in doc or doc[key] is None:
-                continue
-                
-            # Handle datetime fields
-            if datetime in type_set:
-                if isinstance(doc[key], str):
-                    try:
-                        # Try parsing with timezone
-                        doc[key] = datetime.fromisoformat(doc[key].replace('Z', '+00:00'))
-                    except ValueError:
-                        try:
-                            # Try common datetime formats
-                            formats = [
-                                '%Y-%m-%d %H:%M:%S',
-                                '%Y-%m-%d',
-                                '%d/%m/%Y %H:%M:%S',
-                                '%d/%m/%Y'
-                            ]
-                            for fmt in formats:
-                                try:
-                                    doc[key] = datetime.strptime(doc[key], fmt)
-                                    break
-                                except ValueError:
-                                    continue
-                        except Exception:
-                            # If parsing fails, keep as string
-                            pass
-            
-            # Handle numeric fields
-            elif str in type_set and any(t in type_set for t in (int, float)):
-                try:
-                    if isinstance(doc[key], str):
-                        # Remove any non-numeric characters except decimal point
-                        cleaned = ''.join(c for c in doc[key] if c.isdigit() or c == '.')
-                        if cleaned:
-                            if '.' in cleaned:
-                                doc[key] = float(cleaned)
-                            else:
-                                doc[key] = int(cleaned)
-                except ValueError:
-                    pass
-    
-    return documents
-
 @st.cache_data
 def mongo_collection_to_polars(mongo_uri, db_name, collection_name):
     try:
         client = MongoClient(mongo_uri)
         db = client[db_name]
         collection = db[collection_name]
-        
-        # Fetch documents
         documents = list(collection.find())
-        
-        # Convert ObjectIds to strings
         documents = convert_objectid_to_str(documents)
-        
-        # Infer and convert types
-        documents = infer_and_convert_types(documents)
         
         if not documents:
             return pl.DataFrame()
         
-        # Create DataFrame with increased schema inference length
-        polars_df = pl.DataFrame(
-            documents,
-            infer_schema_length=None  # Use all rows for schema inference
-        )
-        
+        polars_df = pl.DataFrame(documents, infer_schema_length=1000)
         return polars_df
-    
     except Exception as e:
-        st.error(f"Error loading collection {collection_name}: {str(e)}")
+        st.error(f"Error loading collection {collection_name}: {e}")
         return pl.DataFrame()
-    
+
+@st.cache_data
 def get_unique_values(_df, column):
     try:
         return _df[column].unique().to_list()
@@ -187,16 +96,11 @@ class DataFilterApp:
         self.mongo_uri = self._get_mongo_uri()
         self._setup_page()
         
-        # Initialize session state variables for refresh control
-        if 'last_refresh' not in st.session_state:
-            st.session_state.last_refresh = datetime.now()
-        if 'auto_refresh' not in st.session_state:
-            st.session_state.auto_refresh = False
         if 'current_filters' not in st.session_state:
             st.session_state.current_filters = {}
         
         self.dataframes = {}
-        self._init_data()
+        self._load_and_merge_collections()
 
     def _get_mongo_uri(self):
         escaped_username = urllib.parse.quote_plus(self.username)
@@ -210,53 +114,6 @@ class DataFilterApp:
             layout="wide",
             initial_sidebar_state="collapsed"
         )
-
-    def _init_data(self):
-        """Initialize or refresh data based on auto-refresh settings"""
-        current_time = datetime.now()
-        
-        # Check if 10 minutes have passed since last refresh
-        if (st.session_state.auto_refresh and 
-            current_time - st.session_state.last_refresh >= timedelta(minutes=10)):
-            self._load_and_merge_collections()
-            st.session_state.last_refresh = current_time
-        elif not self.dataframes:  # Initial load
-            self._load_and_merge_collections()
-
-    def refresh_data(self):
-        """Manual refresh function"""
-        with st.spinner("Refreshing data..."):
-            self._load_and_merge_collections()
-            st.session_state.last_refresh = datetime.now()
-            st.success("Data refreshed successfully!")
-
-    def _create_refresh_controls(self):
-        """Create refresh controls in the main content area"""
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
-        
-        # Manual refresh button
-        with col1:
-            if st.button("🔄 Refresh Data", use_container_width=True):
-                self.refresh_data()
-        
-        # Auto-refresh toggle
-        with col2:
-            st.session_state.auto_refresh = st.toggle(
-                "Auto-refresh (10 min)",
-                value=st.session_state.auto_refresh
-            )
-        
-        # Show last refresh time
-        with col3:
-            last_refresh_str = st.session_state.last_refresh.strftime("%Y-%m-%d %H:%M:%S")
-            st.caption(f"Last refresh: {last_refresh_str}")
-        
-        # Show next refresh time if auto-refresh is enabled
-        with col4:
-            if st.session_state.auto_refresh:
-                next_refresh = st.session_state.last_refresh + timedelta(minutes=10)
-                next_refresh_str = next_refresh.strftime("%Y-%m-%d %H:%M:%S")
-                st.caption(f"Next refresh: {next_refresh_str}")
         
     def _clean_po_number(self, df, po_column):
         """Clean PO numbers by removing non-numeric characters and .0 suffix"""
@@ -447,16 +304,7 @@ class DataFilterApp:
 
     def run(self):
         st.title("📊 MongoDB Dashboard")
-        
-        # Add refresh controls at the top of the page
-        self._create_refresh_controls()
-        
-        # Add a separator
-        st.divider()
-        
-        # Check for auto-refresh
-        if st.session_state.auto_refresh:
-            self._init_data()
+
 
         tabs = st.tabs(["🆕 Merged Data", "🗃️ NFSPDF", "📄 PO"])
         
@@ -483,9 +331,9 @@ class DataFilterApp:
                     
                 with col2:
                     st.dataframe(
-                        filtered_df.to_pandas().set_index(filtered_df.columns[0]),
+                        filtered_df.to_pandas(),
                         use_container_width=True,
-                        hide_index=True,
+                        height=600
                     )
 
 if __name__ == "__main__":
