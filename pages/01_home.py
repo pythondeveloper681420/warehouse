@@ -422,8 +422,15 @@ class DataFilterApp:
                     st.dataframe(
                         filtered_df.to_pandas(),
                         use_container_width=True,
-                        hide_index=True,
+                        #hide_index=True,
                     )
+                # with col2:    
+                #         st.dataframe(
+                #         filtered_df.to_pandas()
+                #         .set_index(filtered_df.columns[0]),
+                #         use_container_width=True,
+                #         hide_index=True,
+                #     )    
                      
 if __name__ == "__main__":
     app = DataFilterApp()
