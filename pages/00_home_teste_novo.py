@@ -8,6 +8,9 @@ from bson.objectid import ObjectId
 from datetime import datetime, timedelta
 import pytz
 
+# Set page config as the first Streamlit command
+st.set_page_config(page_title="Dashboard MongoDB", page_icon="📊", layout="wide")
+
 def slugify(text):
     if not isinstance(text, str):
         text = str(text)
@@ -308,7 +311,6 @@ class DataFilterApp:
         return filtered_df
 
     def run(self):
-        st.set_page_config(page_title="Dashboard MongoDB", page_icon="📊", layout="wide")
         st.title("📊 MongoDB Dashboard")
         
         # Refresh controls
