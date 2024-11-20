@@ -5,6 +5,14 @@ import urllib.parse
 import unicodedata
 import re
 from bson.objectid import ObjectId
+import io 
+
+# Definição das colunas padrão para cada coleção
+default_columns = {
+    'xml': ['nNf','dtEmi','itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe','emitNome'],
+    'po': ['_id'],
+    'nfspdf': ['_id']
+}
 
 # Função para converter ObjectId para strings e tratar tipos de dados
 def convert_document_for_pandas(doc):
@@ -33,13 +41,9 @@ def load_collection_data(mongo_uri, db_name, collection_name):
         db = client[db_name]
         collection = db[collection_name]
         
-        # Buscar documentos e converter para lista
         documents = list(collection.find())
-        
-        # Converter e tratar documentos
         documents = [convert_document_for_pandas(doc) for doc in documents]
         
-        # Criar DataFrame
         if documents:
             df = pd.DataFrame(documents)
             return df
@@ -54,30 +58,36 @@ def load_collection_data(mongo_uri, db_name, collection_name):
 def create_filters(df, collection_name):
     if df.empty:
         st.warning(f"Nenhum dado disponível na coleção {collection_name}")
-        return None
-    
-    st.subheader(f"Filtros para {collection_name}")
-    
-    # Selecionar colunas para filtrar
-    columns = df.columns.tolist()
-    selected_columns = st.multiselect(
-        "Selecione as colunas para filtrar:",
-        columns,
-        key=f"col_select_{collection_name}"
-    )
+        return None, df
     
     filtered_df = df.copy()
     applied_filters = False
     
-    if selected_columns:
-        st.write("Configure os filtros para cada coluna:")
+    # Container para os filtros
+    with st.container():
+        st.subheader("🔍 Filtros")
         
-        # Criar três colunas para layout
-        cols = st.columns(3)
+        # Selecionar colunas para filtrar
+        columns = df.columns.tolist()
         
-        # Para cada coluna selecionada
-        for idx, column in enumerate(selected_columns):
-            with cols[idx % 3]:
+        # Usar as colunas padrão definidas, se existirem
+        default_cols = default_columns.get(collection_name, columns)
+        # Verificar se todas as colunas padrão existem no DataFrame
+        default_cols = [col for col in default_cols if col in columns]
+        
+        selected_columns = st.multiselect(
+            "Selecione as colunas:",
+            columns,
+            default=default_cols,  # Usa as colunas padrão específicas da coleção
+            key=f"col_select_{collection_name}"
+        )
+        
+        # Filtra o DataFrame para mostrar apenas as colunas selecionadas
+        if selected_columns:
+            filtered_df = filtered_df[selected_columns]
+        
+            # Para cada coluna selecionada
+            for column in selected_columns:
                 st.write(f"**{column}**")
                 
                 # Verificar tipo de dados da coluna
@@ -88,7 +98,8 @@ def create_filters(df, collection_name):
                     filter_type = st.radio(
                         f"Tipo de filtro para {column}",
                         ["Texto", "Seleção Múltipla"],
-                        key=f"filter_type_{collection_name}_{column}"
+                        key=f"filter_type_{collection_name}_{column}",
+                        horizontal=True
                     )
                     
                     if filter_type == "Texto":
@@ -122,56 +133,94 @@ def create_filters(df, collection_name):
                     if selected_values:
                         applied_filters = True
                         filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
+                
+                st.divider()
     
-    # Exibir resultados
-    if applied_filters:
-        st.subheader("Resultados")
-        if filtered_df.empty:
-            st.warning("Nenhum resultado encontrado com os filtros aplicados.")
-        else:
-            st.success(f"Encontrados {len(filtered_df)} registros.")
-            st.dataframe(filtered_df, use_container_width=True)
-    else:
-        st.info("Selecione os filtros desejados para visualizar os dados.")
-        if not df.empty:
-            st.dataframe(df, use_container_width=True)
+    return applied_filters, filtered_df
 
-# Configuração da página
-st.set_page_config(
-    page_title="Dashboard MongoDB",
-    page_icon="📊",
-    layout="wide"
-)
+def main():
+    # Configuração da página
+    st.set_page_config(
+        page_title="Dashboard MongoDB",
+        page_icon="📊",
+        layout="wide"
+    )
 
-# Título principal
-st.title("📊 Dashboard MongoDB")
+    # Título principal
+    st.title("📊 Dashboard MongoDB")
 
-# Configurações de conexão
-username = 'devpython86'
-password = 'dD@pjl06081420'
-cluster = 'cluster0.akbb8.mongodb.net'
-db_name = 'warehouse'
-collections = ['xml', 'po', 'nfspdf']
+    # Configurações de conexão
+    username = 'devpython86'
+    password = 'dD@pjl06081420'
+    cluster = 'cluster0.akbb8.mongodb.net'
+    db_name = 'warehouse'
+    collections = ['xml', 'po', 'nfspdf']
 
-# String de conexão MongoDB
-escaped_username = urllib.parse.quote_plus(username)
-escaped_password = urllib.parse.quote_plus(password)
-MONGO_URI = f"mongodb+srv://{escaped_username}:{escaped_password}@{cluster}/{db_name}?retryWrites=true&w=majority"
+    # String de conexão MongoDB
+    escaped_username = urllib.parse.quote_plus(username)
+    escaped_password = urllib.parse.quote_plus(password)
+    MONGO_URI = f"mongodb+srv://{escaped_username}:{escaped_password}@{cluster}/{db_name}?retryWrites=true&w=majority"
+    
+    if st.button("Clear All"):
+    # Clear values from *all* all in-memory and on-disk data caches:
+    # i.e. clear values from both square and cube
+        st.cache_data.clear()
 
-# Criar tabs para cada coleção
-tabs = st.tabs([collection.upper() for collection in collections])
+    # Criar tabs para cada coleção
+    tabs = st.tabs([collection.upper() for collection in collections])
 
-# Processar cada coleção em sua respectiva tab
-for tab, collection_name in zip(tabs, collections):
-    with tab:
-        with st.spinner(f"Carregando dados da coleção {collection_name}..."):
-            df = load_collection_data(MONGO_URI, db_name, collection_name)
-            if not df.empty:
-                st.success(f"✅ Dados da coleção {collection_name} carregados com sucesso!")
-                create_filters(df, collection_name)
-            else:
-                st.error(f"Não foi possível carregar dados da coleção {collection_name}")
+    # Processar cada coleção em sua respectiva tab
+    for tab, collection_name in zip(tabs, collections):
+        with tab:
+            with st.spinner(f"Carregando dados da coleção {collection_name}..."):
+                df = load_collection_data(MONGO_URI, db_name, collection_name)
+                
+                if not df.empty:
+                    st.success(f"✅ Dados carregados: {len(df)} registros")
+                    
+                    # Criar layout de duas colunas
+                    col1, col2 = st.columns([1, 3])
+                    
+                    # Coluna 1: Filtros
+                    with col1:
+                        applied_filters, filtered_df = create_filters(df, collection_name)
+                    
+                    # Coluna 2: Tabela de dados
+                    with col2:
+                        st.subheader("📋 Dados")
+                        
+                        # Exibir contagem de registros filtrados
+                        if applied_filters:
+                            if filtered_df.empty:
+                                st.warning("Nenhum resultado encontrado com os filtros aplicados.")
+                            else:
+                                st.success(f"Encontrados {len(filtered_df)} registros")
+                        else:
+                            st.info("Usando todos os registros (sem filtros)")
+                        
+                        # Add Excel download button
+                        buffer = io.BytesIO()
+                        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                            filtered_df.to_excel(writer, index=False, sheet_name='Dados')
+                        
+                        st.download_button(
+                            label="📥 Baixar dados em Excel",
+                            data=buffer.getvalue(),
+                            file_name=f'{collection_name}_dados.xlsx',
+                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        )
+                        
+                        st.dataframe(
+                            filtered_df,
+                            use_container_width=True,
+                            height=600
+                        )
+                else:
+                    st.error(f"Não foi possível carregar dados da coleção {collection_name}")
 
-# Rodapé simples
-st.divider()
-st.caption("Dashboard de Dados MongoDB v1.0")
+    # Rodapé
+    st.divider()
+    st.caption("Dashboard de Dados MongoDB v1.0")
+
+if __name__ == "__main__":
+    main()

@@ -1,310 +1,213 @@
 import streamlit as st
-import polars as pl
+import pandas as pd
 from pymongo import MongoClient
 import urllib.parse
-from datetime import datetime
+import unicodedata
+import re
 from bson.objectid import ObjectId
+import io 
 
-# Configuração da página
-st.set_page_config(
-    page_title="Dashboard MongoDB",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Função para converter ObjectId para strings e tratar tipos de dados
+def convert_document_for_pandas(doc):
+    for key, value in doc.items():
+        if isinstance(value, ObjectId):
+            doc[key] = str(value)
+        elif isinstance(value, dict):
+            convert_document_for_pandas(value)
+        elif isinstance(value, list):
+            doc[key] = [str(item) if isinstance(item, ObjectId) else item for item in value]
+    return doc
 
-# Inicialização do session state
-if 'filters' not in st.session_state:
-    st.session_state.filters = {}
+# Função para normalizar strings
+def normalize_string(text):
+    if not isinstance(text, str):
+        return str(text)
+    text = unicodedata.normalize('NFKD', text)
+    text = re.sub(r'[^\w\s]', '', text)
+    return text.lower()
 
-def convert_objectid_to_str(documents):
-    """Converte ObjectId para string no documento MongoDB"""
-    for doc in documents:
-        for key, value in doc.items():
-            if isinstance(value, ObjectId):
-                doc[key] = str(value)
-    return documents
-
-def infer_and_convert_types(documents):
-    """Infere e converte tipos dos documentos"""
-    if not documents:
-        return documents
-    
-    for doc in documents:
-        for key, value in doc.items():
-            if isinstance(value, str):
-                # Tenta converter datas
-                try:
-                    doc[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                except ValueError:
-                    pass
-                    
-                # Tenta converter números
-                try:
-                    if value.replace('.', '', 1).isdigit():
-                        doc[key] = float(value) if '.' in value else int(value)
-                except ValueError:
-                    pass
-    
-    return documents
-
+# Função para carregar a coleção MongoDB
 @st.cache_data
-def get_mongo_data(collection_name):
-    """Busca dados do MongoDB"""
+def load_collection_data(mongo_uri, db_name, collection_name):
     try:
-        username = 'devpython86'
-        password = 'dD@pjl06081420'
-        cluster = 'cluster0.akbb8.mongodb.net'
-        db_name = 'warehouse'
-        
-        # Conecta ao MongoDB
-        mongo_uri = f"mongodb+srv://{urllib.parse.quote_plus(username)}:{urllib.parse.quote_plus(password)}@{cluster}/{db_name}?retryWrites=true&w=majority"
         client = MongoClient(mongo_uri)
         db = client[db_name]
+        collection = db[collection_name]
         
-        # Busca documentos
-        documents = list(db[collection_name].find())
-        documents = convert_objectid_to_str(documents)
-        documents = infer_and_convert_types(documents)
+        documents = list(collection.find())
+        documents = [convert_document_for_pandas(doc) for doc in documents]
         
-        # Converte para DataFrame
         if documents:
-            return pl.DataFrame(documents)
-        return pl.DataFrame()
-        
+            df = pd.DataFrame(documents)
+            return df
+        else:
+            return pd.DataFrame()
+            
     except Exception as e:
         st.error(f"Erro ao carregar dados: {str(e)}")
-        return pl.DataFrame()
+        return pd.DataFrame()
 
-def merge_collections():
-    """Realiza o merge das coleções"""
-    try:
-        # Carrega dados
-        xml_df = get_mongo_data('xml')
-        po_df = get_mongo_data('po')
-        nfspdf_df = get_mongo_data('nfspdf')
-        
-        # Processa PO
-        if not po_df.is_empty():
-            po_df = po_df.unique(subset=['Purchasing Document'])
-            po_df = po_df.with_columns([
-                pl.col('Purchasing Document')
-                .cast(pl.Utf8)
-                .str.replace_all(r'\D', '')
-                .alias('Purchasing Document_cleaned')
-            ])
-            po_df = po_df.select([
-                'Purchasing Document_cleaned',
-                'Project Code',
-                'Andritz WBS Element',
-                'Cost Center'
-            ])
-        
-        # Merge XML + PO
-        if not xml_df.is_empty() and not po_df.is_empty():
-            xml_df = xml_df.with_columns([
-                pl.col('po')
-                .cast(pl.Utf8)
-                .str.replace_all(r'\D', '')
-                .str.replace(r'\.0$', '')
-                .alias('po_cleaned')
-            ])
-            
-            merged_xml_po = xml_df.join(
-                po_df,
-                left_on='po_cleaned',
-                right_on='Purchasing Document_cleaned',
-                how='left'
-            ).sort(by=['dtEmi', 'nNf', 'itemNf'], descending=[True, False, False])
-        else:
-            merged_xml_po = pl.DataFrame()
-            
-        # Merge NFSPDF + PO
-        if not nfspdf_df.is_empty() and not po_df.is_empty():
-            if 'po' in nfspdf_df.columns:
-                nfspdf_df = nfspdf_df.with_columns([
-                    pl.col('po')
-                    .cast(pl.Utf8)
-                    .str.replace_all(r'\D', '')
-                    .alias('po_cleaned')
-                ])
-                
-                merged_nfspdf_po = nfspdf_df.join(
-                    po_df,
-                    left_on='po_cleaned',
-                    right_on='Purchasing Document_cleaned',
-                    how='left'
-                ).sort(by=['Data Emissão'], descending=True)
-            else:
-                merged_nfspdf_po = nfspdf_df
-        else:
-            merged_nfspdf_po = pl.DataFrame()
-            
-        return {
-            'merged_data': merged_xml_po,
-            'merged_nfspdf': merged_nfspdf_po,
-            'po': po_df
-        }
-        
-    except Exception as e:
-        st.error(f"Erro ao realizar merge: {str(e)}")
-        return {
-            'merged_data': pl.DataFrame(),
-            'merged_nfspdf': pl.DataFrame(),
-            'po': pl.DataFrame()
-        }
-
+# Função para criar interface de filtros
 def create_filters(df, collection_name):
-    """Cria filtros para o DataFrame"""
-    if df.is_empty():
-        return {}
+    if df.empty:
+        st.warning(f"Nenhum dado disponível na coleção {collection_name}")
+        return None, df
     
-    # Seleciona colunas para filtrar
-    columns = st.multiselect(
-        "Selecione as colunas para filtrar:",
-        df.columns,
-        key=f"cols_{collection_name}"
-    )
+    filtered_df = df.copy()
+    applied_filters = False
     
-    filters = {}
-    
-    # Cria filtros para cada coluna selecionada
-    for column in columns:
-        st.markdown(f"### {column}")
+    # Container para os filtros
+    with st.container():
+        st.subheader("🔍 Filtros")
         
-        # Estado do filtro
-        filter_key = f"filter_{collection_name}_{column}"
-        if filter_key not in st.session_state:
-            st.session_state[filter_key] = {"type": "contains", "values": []}
-        
-        # Opções de filtro
-        filter_type = st.radio(
-            "Tipo de filtro:",
-            ["contains", "equals", "range"],
-            key=f"type_{collection_name}_{column}",
-            horizontal=True
+        # Selecionar colunas para filtrar
+        columns = df.columns.tolist()
+        selected_columns = st.multiselect(
+            "Selecione as colunas:",
+            columns,
+            default=columns,  # Seleciona todas as colunas por padrão
+            key=f"col_select_{collection_name}"
         )
         
-        # Atualiza o tipo de filtro no session state
-        st.session_state[filter_key]["type"] = filter_type
+        # Filtra o DataFrame para mostrar apenas as colunas selecionadas
+        filtered_df = filtered_df[selected_columns]
         
-        # Cria o filtro apropriado baseado no tipo selecionado
-        if filter_type == "contains":
-            value = st.text_input(
-                "Digite o valor para buscar:",
-                key=f"contains_{collection_name}_{column}"
-            )
-            if value:
-                filters[column] = ("contains", value)
-        
-        elif filter_type == "equals":
-            unique_values = df[column].unique().to_list()
-            try:
-                unique_values = sorted(unique_values)
-            except:
-                pass
-            
-            values = st.multiselect(
-                "Selecione os valores exatos:",
-                unique_values,
-                key=f"equals_{collection_name}_{column}",
-                default=st.session_state[filter_key].get("values", [])
-            )
-            if values:
-                filters[column] = ("equals", values)
-                st.session_state[filter_key]["values"] = values
-        
-        elif filter_type == "range":
-            try:
-                min_val = df[column].min()
-                max_val = df[column].max()
+        if selected_columns:
+            # Para cada coluna selecionada
+            for column in selected_columns:
+                st.write(f"**{column}**")
                 
-                if isinstance(min_val, (int, float)):
-                    range_values = st.slider(
-                        "Selecione o intervalo:",
-                        min_value=float(min_val),
-                        max_value=float(max_val),
-                        value=(float(min_val), float(max_val)),
-                        key=f"range_{collection_name}_{column}"
+                # Verificar tipo de dados da coluna
+                unique_values = df[column].unique()
+                
+                # Opção de tipo de filtro para texto
+                if df[column].dtype == 'object':
+                    filter_type = st.radio(
+                        f"Tipo de filtro para {column}",
+                        ["Texto", "Seleção Múltipla"],
+                        key=f"filter_type_{collection_name}_{column}",
+                        horizontal=True
                     )
-                    if range_values != (min_val, max_val):
-                        filters[column] = ("range", range_values)
-            except:
-                st.warning("Filtro de intervalo não disponível para esta coluna")
+                    
+                    if filter_type == "Texto":
+                        search_text = st.text_input(
+                            "Digite para buscar:",
+                            key=f"text_{collection_name}_{column}"
+                        )
+                        if search_text:
+                            applied_filters = True
+                            mask = df[column].fillna("").astype(str).apply(normalize_string).str.contains(
+                                normalize_string(search_text)
+                            )
+                            filtered_df = filtered_df[mask]
+                    else:
+                        selected_values = st.multiselect(
+                            "Selecione os valores:",
+                            unique_values,
+                            key=f"multi_{collection_name}_{column}"
+                        )
+                        if selected_values:
+                            applied_filters = True
+                            filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
+                
+                # Para colunas numéricas
+                elif pd.api.types.is_numeric_dtype(df[column]):
+                    selected_values = st.multiselect(
+                        "Selecione os valores:",
+                        sorted(unique_values),
+                        key=f"num_{collection_name}_{column}"
+                    )
+                    if selected_values:
+                        applied_filters = True
+                        filtered_df = filtered_df[filtered_df[column].isin(selected_values)]
+                
+                st.divider()
     
-    return filters
-
-def apply_filters(df, filters):
-    """Aplica filtros ao DataFrame"""
-    if not filters:
-        return df
-    
-    filtered_df = df
-    
-    for column, (filter_type, value) in filters.items():
-        try:
-            if filter_type == "contains":
-                filtered_df = filtered_df.filter(
-                    pl.col(column).cast(pl.Utf8).str.contains(str(value), case_sensitive=False)
-                )
-            elif filter_type == "equals":
-                filtered_df = filtered_df.filter(pl.col(column).is_in(value))
-            elif filter_type == "range":
-                min_val, max_val = value
-                filtered_df = filtered_df.filter(
-                    (pl.col(column) >= min_val) & (pl.col(column) <= max_val)
-                )
-        except Exception as e:
-            st.error(f"Erro ao aplicar filtro na coluna {column}: {str(e)}")
-    
-    return filtered_df
+    return applied_filters, filtered_df
 
 def main():
-    st.title("📊 MongoDB Dashboard")
+    # Configuração da página
+    st.set_page_config(
+        page_title="Dashboard MongoDB",
+        page_icon="📊",
+        layout="wide"
+    )
+
+    # Título principal
+    st.title("📊 Dashboard MongoDB")
+
+    # Configurações de conexão
+    username = 'devpython86'
+    password = 'dD@pjl06081420'
+    cluster = 'cluster0.akbb8.mongodb.net'
+    db_name = 'warehouse'
+    collections = ['xml', 'po', 'nfspdf']
+
+    # String de conexão MongoDB
+    escaped_username = urllib.parse.quote_plus(username)
+    escaped_password = urllib.parse.quote_plus(password)
+    MONGO_URI = f"mongodb+srv://{escaped_username}:{escaped_password}@{cluster}/{db_name}?retryWrites=true&w=majority"
     
-    # Carrega e merge as coleções
-    dataframes = merge_collections()
-    
-    # Cria tabs
-    tabs = st.tabs(["🆕 Merged Data", "🗃️ NFSPDF", "📄 PO"])
-    collections = ['merged_data', 'merged_nfspdf', 'po']
-    
-    # Processa cada tab
+    if st.button("Clear All"):
+    # Clear values from *all* all in-memory and on-disk data caches:
+    # i.e. clear values from both square and cube
+        st.cache_data.clear()
+
+    # Criar tabs para cada coleção
+    tabs = st.tabs([collection.upper() for collection in collections])
+
+    # Processar cada coleção em sua respectiva tab
     for tab, collection_name in zip(tabs, collections):
         with tab:
-            df = dataframes[collection_name]
-            
-            if df.is_empty():
-                st.error(f"Nenhum dado encontrado na coleção {collection_name}")
-                continue
-            
-            # Layout em colunas
-            col1, col2 = st.columns([1, 4])
-            
-            with col1:
-                st.metric("Total de Registros", len(df))
+            with st.spinner(f"Carregando dados da coleção {collection_name}..."):
+                df = load_collection_data(MONGO_URI, db_name, collection_name)
                 
-                # Cria e aplica filtros
-                filters = create_filters(df, collection_name)
-                
-                if filters:
-                    filtered_df = apply_filters(df, filters)
-                    st.metric("Registros Filtrados", len(filtered_df))
+                if not df.empty:
+                    st.success(f"✅ Dados carregados: {len(df)} registros")
+                    
+                    # Criar layout de duas colunas
+                    col1, col2 = st.columns([1, 2])
+                    
+                    # Coluna 1: Filtros
+                    with col1:
+                        applied_filters, filtered_df = create_filters(df, collection_name)
+                    
+                    # Coluna 2: Tabela de dados
+                    with col2:
+                        st.subheader("📋 Dados")
+                                               
+                        # Exibir contagem de registros filtrados
+                        if applied_filters:
+                            if filtered_df.empty:
+                                st.warning("Nenhum resultado encontrado com os filtros aplicados.")
+                            else:
+                                st.success(f"Encontrados {len(filtered_df)} registros")
+                        else:
+                            st.info("Usando todos os registros (sem filtros)")
+                        
+                        # Add Excel download button
+                        buffer = io.BytesIO()
+                        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                            filtered_df.to_excel(writer, index=False, sheet_name='Dados')
+                        
+                        st.download_button(
+                            label="📥 Baixar dados em Excel",
+                            data=buffer.getvalue(),
+                            file_name=f'{collection_name}_dados.xlsx',
+                            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                        )
+                        
+                        st.dataframe(
+                            filtered_df,
+                            use_container_width=True,
+                            height=600
+                        )
                 else:
-                    filtered_df = df
-                
-                # Botão para limpar filtros
-                if st.button("Limpar Filtros", key=f"clear_{collection_name}"):
-                    for key in list(st.session_state.keys()):
-                        if key.startswith(f"filter_{collection_name}"):
-                            del st.session_state[key]
-                    st.rerun()
-            
-            with col2:
-                st.dataframe(
-                    filtered_df.to_pandas(),
-                    use_container_width=True
-                )
+                    st.error(f"Não foi possível carregar dados da coleção {collection_name}")
+
+    # Rodapé
+    st.divider()
+    st.caption("Dashboard de Dados MongoDB v1.0")
 
 if __name__ == "__main__":
     main()

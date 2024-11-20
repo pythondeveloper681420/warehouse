@@ -5,6 +5,7 @@ import urllib.parse
 import unicodedata
 import re
 from bson.objectid import ObjectId
+import io 
 
 # Função para converter ObjectId para strings e tratar tipos de dados
 def convert_document_for_pandas(doc):
@@ -172,6 +173,19 @@ def main():
                                 st.warning("Nenhum resultado encontrado com os filtros aplicados.")
                             else:
                                 st.success(f"Encontrados {len(filtered_df)} registros")
+                                
+                                # Add Excel download button
+                                buffer = io.BytesIO()
+                                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                                    filtered_df.to_excel(writer, index=False, sheet_name='Dados')
+                                
+                                st.download_button(
+                                    label="📥 Baixar dados em Excel",
+                                    data=buffer.getvalue(),
+                                    file_name=f'{collection_name}_dados.xlsx',
+                                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                                )
+                                
                                 st.dataframe(
                                     filtered_df,
                                     use_container_width=True,
@@ -179,6 +193,19 @@ def main():
                                 )
                         else:
                             st.info("Usando todos os registros (sem filtros)")
+                            
+                            # Add Excel download button for full dataframe
+                            buffer = io.BytesIO()
+                            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                                df.to_excel(writer, index=False, sheet_name='Dados')
+                            
+                            st.download_button(
+                                label="📥 Baixar dados em Excel",
+                                data=buffer.getvalue(),
+                                file_name=f'{collection_name}_dados.xlsx',
+                                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                            )
+                            
                             st.dataframe(
                                 df,
                                 use_container_width=True,

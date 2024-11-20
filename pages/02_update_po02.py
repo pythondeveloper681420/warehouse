@@ -91,22 +91,48 @@ class DataProcessor:
             return 0
 
     @staticmethod
+    def calculate_pbxx_amount(net_value: float) -> float:
+        """Calculate PBXX Condition Amount if not present"""
+        try:
+            # Aqui você pode ajustar a fórmula de cálculo conforme necessário
+            # Por exemplo, adicionar impostos ou outras considerações
+            return net_value * 1.18  # Exemplo: acréscimo de 18%
+        except:
+            return 0
+
+    @staticmethod
     def process_chunk(df: pd.DataFrame) -> pd.DataFrame:
         """Process a chunk of data"""
         try:
             chunk_processed = df.copy()
             
-            numeric_columns = ['Net order value', 'Order Quantity', 'PBXX Condition Amount']
+            # Convert numeric columns
+            numeric_columns = ['Net order value', 'Order Quantity']
             for col in numeric_columns:
                 if col in chunk_processed.columns:
                     chunk_processed[col] = pd.to_numeric(chunk_processed[col], errors='coerce')
                     chunk_processed[col] = chunk_processed[col].fillna(0)
             
+            # Handle PBXX Condition Amount
+            if 'PBXX Condition Amount' not in chunk_processed.columns:
+                logger.info("PBXX Condition Amount column not found. Creating calculated version.")
+                chunk_processed['PBXX Condition Amount'] = chunk_processed['Net order value'].apply(
+                    DataProcessor.calculate_pbxx_amount
+                )
+            else:
+                # Convert existing PBXX column to numeric
+                chunk_processed['PBXX Condition Amount'] = pd.to_numeric(
+                    chunk_processed['PBXX Condition Amount'], 
+                    errors='coerce'
+                ).fillna(0)
+            
+            # Calculate valor_unitario
             chunk_processed['valor_unitario'] = chunk_processed.apply(
                 lambda row: DataProcessor.safe_division(row['Net order value'], row['Order Quantity']),
                 axis=1
             )
             
+            # Calculate valor_item_com_impostos using PBXX
             chunk_processed['valor_item_com_impostos'] = (
                 chunk_processed['PBXX Condition Amount'] * chunk_processed['Order Quantity']
             )
@@ -121,6 +147,12 @@ class DataProcessor:
     def process_dataframe(df: pd.DataFrame, progress_bar: Any) -> pd.DataFrame:
         """Process the complete DataFrame with progress tracking"""
         try:
+            # Verify required columns
+            required_columns = ['Purchasing Document', 'Item', 'Net order value', 'Order Quantity']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+            
             chunk_size = CHUNK_SIZE
             num_chunks = len(df) // chunk_size + 1
             processed_chunks = []
@@ -138,44 +170,37 @@ class DataProcessor:
                 
             df_processed = pd.concat(processed_chunks, ignore_index=True)
             
-            # Eliminar as linhas onde os valores na coluna 'coluna' são strings
-            df_processed = df_processed[~df_processed['Purchasing Document'].apply(lambda x: isinstance(x, str))]
-                       
-            df_processed['unique'] = (
-                df_processed['Purchasing Document'].astype(str) + 
-                df_processed['Item'].astype(str)
-            )
+            # Ensure Purchasing Document is string type for concatenation
+            df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(str)
+            df_processed['Item'] = df_processed['Item'].astype(str)
             
-            # Evitar SettingWithCopyWarning e garantir a conversão correta
-            # df_processed.loc[:, 'unique'] = df_processed['Purchasing Document'].astype(str) + df_processed['Item'].astype(str)
-
-            # Garantir que a coluna 'Supplier' seja tratada como string (para evitar problemas com valores não numéricos)
-            #df_processed['Supplier'] = df_processed['Supplier'].astype(str)
+            # Create unique identifier
+            df_processed['unique'] = df_processed['Purchasing Document'] + df_processed['Item']
             
             df_processed = df_processed.drop_duplicates(subset=['unique'])
             
+            # Calculate totals
             groupby_cols = ['Purchasing Document']
             df_processed['total_valor_po_liquido'] = df_processed.groupby(groupby_cols)['Net order value'].transform('sum')
             df_processed['total_valor_po_com_impostos'] = df_processed.groupby(groupby_cols)['valor_item_com_impostos'].transform('sum')
             df_processed['total_itens_po'] = df_processed.groupby(groupby_cols)['Order Quantity'].transform('sum')
-                        
-            # df_processed['Purchasing Document'] = pd.to_numeric(df_processed['Purchasing Document'], errors='coerce')
-            # df_processed = df_processed.dropna(subset=['Purchasing Document'])
-            # df_processed['Purchasing Document'] = df_processed['Purchasing Document'].astype(int)
             
-            df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'], dayfirst=True)
-            df_processed = df_processed.sort_values(by='PO Creation Date', ascending=False)
+            # Convert and format dates
+            if 'Document Date' in df_processed.columns:
+                df_processed['PO Creation Date'] = pd.to_datetime(df_processed['Document Date'], dayfirst=True, errors='coerce')
+                df_processed = df_processed.sort_values(by='PO Creation Date', ascending=False)
             
-
-            
+            # Format currency columns
             currency_columns = [
                 'valor_unitario', 'valor_item_com_impostos', 'Net order value',
                 'total_valor_po_liquido', 'total_valor_po_com_impostos'
             ]
             
             for col in currency_columns:
-                df_processed[f'{col}_formatted'] = df_processed[col].apply(DataProcessor.format_currency)
+                if col in df_processed.columns:
+                    df_processed[f'{col}_formatted'] = df_processed[col].apply(DataProcessor.format_currency)
             
+            # Process date columns
             date_columns = [
                 'Document Date', 'Delivery date', 'Last FUP', 
                 'Stat.-Rel. Del. Date', 'Delivery Date', 
@@ -192,46 +217,34 @@ class DataProcessor:
                         errors='coerce'
                     )
                     df_processed[col] = df_processed[col].dt.strftime('%d/%m/%Y')
-                    
-            @staticmethod
-            def extract_code(text):
-                """
-                Extrai apenas os 6 dígitos do padrão X-XX-XXXXXX-XXX-XXXX-XXX, onde X pode ser letra ou número.
-                
-                Parameters:
-                text (str): O texto onde procurar os códigos
-                
-                Returns:
-                str: String apenas com os 6 dígitos ou vazio se não encontrar
-                """
-                
-                
-                if not text or not isinstance(text, str):
-                    return ""
-                
-                # Padrão para capturar 6 dígitos após qualquer letra/número e traço
-                pattern = r'[A-Z0-9]-[A-Z0-9]{2}-(\d{6})-\d{3}-\d{4}-\d{3}'
-                
-                # Encontra o match no texto
-                match = re.search(pattern, text)
-                
-                # Retorna apenas os 6 dígitos se encontrar
-                return match.group(1) if match else ""
-            df_processed['codigo_projeto'] = df_processed['Andritz WBS Element'].apply(extract_code)
-            df_processed['codigo_projeto'] = df_processed['codigo_projeto'].apply(
-                lambda x: int(x) if x != "" else ""
-            )     
-                     
-            # Select only the desired columns
-            df_processed = df_processed[SELECTED_COLUMNS]        
-                       
+            
+            # Extract project code if WBS Element exists
+            if 'Andritz WBS Element' in df_processed.columns:
+                df_processed['codigo_projeto'] = df_processed['Andritz WBS Element'].apply(DataProcessor.extract_code)
+                df_processed['codigo_projeto'] = df_processed['codigo_projeto'].apply(
+                    lambda x: int(x) if x != "" else ""
+                )
+            
+            # Select only columns that exist in the DataFrame
+            available_columns = [col for col in SELECTED_COLUMNS if col in df_processed.columns]
+            df_processed = df_processed[available_columns]
+            
             return df_processed
-        
                          
         except Exception as e:
             logger.error(f"Error in process_dataframe: {str(e)}")
             raise
-             
+
+    @staticmethod
+    def extract_code(text):
+        """Extract 6 digits from the pattern X-XX-XXXXXX-XXX-XXXX-XXX"""
+        if not text or not isinstance(text, str):
+            return ""
+        
+        pattern = r'[A-Z0-9]-[A-Z0-9]{2}-(\d{6})-\d{3}-\d{4}-\d{3}'
+        match = re.search(pattern, text)
+        return match.group(1) if match else ""
+                     
 class FileHandler:
     """Class to handle file operations"""
     

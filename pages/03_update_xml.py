@@ -98,31 +98,63 @@ def clean_description(description):
 #         return ""
     
 def extract_numbers(text):
-    """
-    Extrai números que começam com 4501, 4502, 4503 ou 4504 de qualquer parte do texto.
-    
-    Parameters:
-    text (str): O texto onde procurar os números
-    
-    Returns:
-    str: String com os números encontrados separados por espaço
-    """
-    import re
-    
-    if not text:
-        return ""
-    
-    # Padrão para encontrar números que começam com 4501, 4502, 4503 ou 4504
-    pattern = r'(450[1-4]\d{0,6})'
-    
-    # Encontra todos os matches no texto
-    matches = re.findall(pattern, text)
-    
-    # Filtra para pegar apenas os primeiros 10 números encontrados
-    numbers = matches[:10]
-    
-    # Retorna os números encontrados separados por espaço
-    return ' '.join(numbers) if numbers else ""
+   """
+   Extrai números que começam com 4501-4506, retornando apenas 6 dígitos após o prefixo.
+   
+   Parameters:
+   text (str): O texto onde procurar os números
+   
+   Returns:
+   str: String com os números encontrados separados por espaço
+   """
+   import re
+   
+   if not text or not isinstance(text, str):
+       return ""
+   
+   # Primeiro encontra números começando com 450[1-6] e qualquer quantidade de dígitos após
+   pattern = r'(450[1-6]\d{6,})'
+   matches = re.findall(pattern, text)
+   
+   # Processa cada match para garantir apenas 6 dígitos após o prefixo
+   processed_numbers = []
+   for number in matches:
+       # Pega apenas os primeiros 10 dígitos (4 do prefixo + 6 dígitos)
+       truncated = number[:10]
+       processed_numbers.append(truncated)
+   
+   # Remove duplicatas mantendo a ordem
+   unique_numbers = list(dict.fromkeys(processed_numbers))
+   
+   # Retorna os primeiros 10 números encontrados
+   return ' '.join(unique_numbers[:10]) if unique_numbers else ""
+
+def extract_code(text):
+   """
+   Extrai apenas os 6 dígitos do padrão X-XX-XXXXXX-XXX-XXXX-XXX, onde X pode ser letra ou número.
+   
+   Parameters:
+   text (str): O texto onde procurar os códigos
+   
+   Returns:
+   str: String apenas com os 6 dígitos ou vazio se não encontrar
+   """
+   import re
+   
+   if not text or not isinstance(text, str):
+       return ""
+   
+   # Padrão para capturar 6 dígitos após qualquer letra/número e traço
+   pattern = r'[A-Z0-9]-[A-Z0-9]{2}-(\d{6})-\d{3}-\d{4}-\d{3}'
+   
+   # Encontra o match no texto
+   match = re.search(pattern, text)
+   
+   # Retorna apenas os 6 dígitos se encontrar
+   return match.group(1) if match else ""
+
+# Para usar no DataFrame:
+# df['numero_projeto'] = df['info_adic'].apply(extract_code)
 
 def format_value(value_str):
     """Formata o valor substituindo vírgulas por pontos e convertendo para float se possível."""
@@ -160,6 +192,11 @@ class ReadXML:
         data_emissao = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:ide/ns:dhEmi", nsNFe))
         #data_emissao = f"{data_emissao[8:10]}/{data_emissao[5:7]}/{data_emissao[:4]}" if data_emissao else ""
         info_adic = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:infAdic/ns:infCpl", nsNFe))
+        info_AdFisco = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:infAdic/ns:infAdFisco", nsNFe))
+        info_xPed = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:compra/ns:xPed", nsNFe))
+        
+        #'info_AdFisco','info_xPed'
+        
         dVenc = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:cobr/ns:dup/ns:dVenc", nsNFe))
         #dVenc = f"{dVenc[8:10]}/{dVenc[5:7]}/{dVenc[:4]}" if dVenc else ""
         #dVenc = dVenc.replace("//", "")
@@ -228,7 +265,7 @@ class ReadXML:
             usuario = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:transp/ns:vol/ns:placa", nsNFe))
             data_saida = self.check_none(root.find("./ns:NFe/ns:infNFe/ns:transp/ns:vol/ns:uf", nsNFe))
 
-            dados = [chNFe, NFe, serie, natOp, data_emissao, info_adic, dVenc, 
+            dados = [chNFe, NFe, serie, natOp, data_emissao, info_adic, dVenc, info_AdFisco,info_xPed,
                     emit_data['CNPJ Emitente'], emit_data['Nome Emitente'],
                     dest_data['CNPJ Destinatário'], dest_data['Nome Destinatário'], valorNfe, valor_frete, itemNota, cod, qntd, descricao, unidade_medida, vlUnProd, valorProd, ncm, cfop , xPed, nItemPed,
                     infAdProd, data_importacao, usuario, data_saida,
@@ -317,7 +354,7 @@ def main():
 
     # Criando DataFrame Pandas
             df = pd.DataFrame(dados, columns=[
-                'chaveNfe', 'NFe', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 'CNPJ Emitente', 'Nome Emitente',
+                'chaveNfe', 'NFe', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 'info_AdFisco','info_xPed','CNPJ Emitente', 'Nome Emitente',
                 'CNPJ Destinatário', 'Nome Destinatário', 'Valor NF-e', 'Valor Frete', 'Item Nota', 'Cód Produto',
                 'Quantidade', 'Descrição', 'Unidade Medida', 'vlUnProd', 'vlTotProd', 'ncm', 'cfop' ,'xPed', 'nItemPed',
                 'infAdProd', 'Data Importação', 'Usuário', 'Data Saída', 'Fatura', 'Duplicata', 'Valor Original', 'Valor Pago',
@@ -328,7 +365,7 @@ def main():
             ])
 
             colunas = [
-                'chaveNfe', 'NFe', 'Nome Emitente', 'Descrição', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 
+                'chaveNfe', 'NFe', 'Nome Emitente', 'Descrição', 'Série', 'natOp','Data de Emissão', 'info_adic', 'dVenc', 'info_AdFisco','info_xPed',
                 'CNPJ Emitente', 'CNPJ Destinatário', 'Nome Destinatário', 'Valor NF-e', 'Valor Frete', 'Item Nota', 
                 'Cód Produto', 'Quantidade', 'Unidade Medida', 'vlUnProd', 'vlTotProd', 'ncm', 'cfop', 'xPed', 'nItemPed', 
                 'infAdProd', 'Data Importação', 'Usuário', 'Data Saída', 'Fatura', 'Duplicata', 'Valor Original', 
@@ -391,14 +428,15 @@ def main():
 
             df['Descrição'] = df['Descrição'].apply(clean_description).str.upper()
             
-            # Aplicar a função para filtrar e formatar a coluna 'info_adic'
-            df['po'] = df['info_adic'].fillna("") + " " + df['xPed'].fillna("") + " " + df['nItemPed'].fillna("") + " " + df['infAdProd'].fillna("")
+            # Aplicar a função para filtrar e formatar a coluna 'info_adic''info_AdFisco','info_xPed'
+            df['po'] = df['info_adic'].fillna("") + " " + df['xPed'].fillna("") + " " + df['nItemPed'].fillna("") + " " + df['infAdProd'].fillna("")+ df['info_AdFisco'].fillna("") + " " + df['info_xPed'].fillna("")
             #df['po'] = df['po'].apply(filter_info_adic)
             df['po'] = df['po'].apply(extract_numbers)
             
             # Extrair apenas os números e filtrar para 10 caracteres exatos
             df['po'] = df['po'].apply(lambda x: extract_numbers(x) if len(extract_numbers(x)) == 10 else '')
             
+            df['codigo_projeto'] = df['info_adic'].apply(extract_code)
             # # Função para truncar os primeiros 10 caracteres
             # def truncate_to_10_chars(text):
             #     return text[:10] if text else ""
@@ -517,7 +555,7 @@ def main():
             colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
                                     'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
                                     'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                    'cfop','unique']
+                                    'cfop','unique','codigo_projeto']
             
             df= df[colunas_renomeadas]
             
@@ -801,7 +839,7 @@ def main():
             colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
                                     'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
                                     'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                    'cfop','total_invoices_per_po', 'categoria','my_categoria','unique']
+                                    'cfop','total_invoices_per_po', 'categoria','my_categoria','unique','codigo_projeto']
             
             df= df[colunas_renomeadas]
 

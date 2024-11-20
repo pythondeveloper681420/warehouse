@@ -125,6 +125,16 @@ def clean_dataframe(df):
     """Limpa e prepara o DataFrame para inserção no MongoDB."""
     df_clean = df.copy()
     
+    # Remove '_id' e 'creation_date' se existirem para evitar conflitos
+    columns_to_drop = []
+    if '_id' in df_clean.columns:
+        columns_to_drop.append('_id')
+    if 'creation_date' in df_clean.columns:
+        columns_to_drop.append('creation_date')
+    
+    if columns_to_drop:
+        df_clean = df_clean.drop(columns=columns_to_drop)
+    
     # Adiciona 'creation_date' automaticamente com o timestamp UTC e timezone-aware
     df_clean['creation_date'] = datetime.now(timezone.utc)
     

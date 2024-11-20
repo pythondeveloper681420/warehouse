@@ -91,31 +91,60 @@ def convert_brazilian_number(value):
         return 0.0
     
 def extract_numbers(text):
-    """
-    Extracts numbers that start with 4501, 4502, 4503 or 4504 from the given text.
+   """
+   Extrai números que começam com 4501-4506, retornando apenas 6 dígitos após o prefixo.
+   
+   Parameters:
+   text (str): O texto onde procurar os números
+   
+   Returns:
+   str: String com os números encontrados separados por espaço
+   """
+   import re
+   
+   if not text or not isinstance(text, str):
+       return ""
+   
+   # Primeiro encontra números começando com 450[1-6] e qualquer quantidade de dígitos após
+   pattern = r'(450[1-6]\d{6,})'
+   matches = re.findall(pattern, text)
+   
+   # Processa cada match para garantir apenas 6 dígitos após o prefixo
+   processed_numbers = []
+   for number in matches:
+       # Pega apenas os primeiros 10 dígitos (4 do prefixo + 6 dígitos)
+       truncated = number[:10]
+       processed_numbers.append(truncated)
+   
+   # Remove duplicatas mantendo a ordem
+   unique_numbers = list(dict.fromkeys(processed_numbers))
+   
+   # Retorna os primeiros 10 números encontrados
+   return ' '.join(unique_numbers[:10]) if unique_numbers else ""
 
-    Parameters:
-    text (str): The text to search for numbers
-
-    Returns:
-    str: Space-separated string of the numbers found
-    """
-    import re
-
-    if not text:
-        return ""
-
-    # Pattern to find numbers starting with 4501, 4502, 4503 or 4504
-    pattern = r'(450[1-4]\d{0,6})'
-
-    # Find all matches in the text
-    matches = re.findall(pattern, text)
-
-    # Filter to get only the first 10 numbers found
-    numbers = matches[:10]
-
-    # Return the numbers as a space-separated string
-    return ' '.join(numbers) if numbers else "" 
+def extract_code(text):
+   """
+   Extrai apenas os 6 dígitos do padrão X-XX-XXXXXX-XXX-XXXX-XXX, onde X pode ser letra ou número.
+   
+   Parameters:
+   text (str): O texto onde procurar os códigos
+   
+   Returns:
+   str: String apenas com os 6 dígitos ou vazio se não encontrar
+   """
+   import re
+   
+   if not text or not isinstance(text, str):
+       return ""
+   
+   # Padrão para capturar 6 dígitos após qualquer letra/número e traço
+   pattern = r'[A-Z0-9]-[A-Z0-9]{2}-(\d{6})-\d{3}-\d{4}-\d{3}'
+   
+   # Encontra o match no texto
+   match = re.search(pattern, text)
+   
+   # Retorna apenas os 6 dígitos se encontrar
+   return match.group(1) if match else ""
 
 def extrair_dados_nf(pdf_file):
     """Extrai dados importantes da Nota Fiscal do PDF."""
@@ -387,6 +416,8 @@ def main():
                 df_nf['po'] = df_nf['Discriminacao do Servico'].fillna('').apply(extract_numbers).str[:10]  
                 df_nf['po'] = df_nf['po'].apply(lambda x: x if len(x) == 10 else '')             
                 df_nf['po'] = df_nf['po'].fillna('').apply(extract_numbers)
+                
+                df_nf['codigo_projeto'] = df_nf['Discriminacao do Servico'].apply(extract_code)
                 
                 # Process data
                 df_nf['Data Emissão'] = pd.to_datetime(df_nf['Data Emissão'], format='%d/%m/%Y %H:%M')
