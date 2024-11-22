@@ -9,7 +9,7 @@ import io
 
 # Definição das colunas padrão para cada coleção
 default_columns = {
-    'xml': ['nNf','dtEmi','itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe','emitNome'],
+    'xml': ['_id'],
     'po': ['_id'],
     'nfspdf': ['_id']
 }

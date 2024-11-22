@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import gc
 import logging
@@ -9,6 +9,13 @@ from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
 import base64
 import re
+
+import polars as pl
+from pymongo import MongoClient
+import urllib.parse
+import unicodedata
+from bson.objectid import ObjectId
+from datetime import datetime, timedelta
 
 # Desabilitar a exibição de separadores de milhar
 pd.options.display.float_format = '{:,.0f}'.format  # Para números decimais
@@ -23,6 +30,69 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_SIZE_MB = 200
 BYTES_PER_MB = 1024 * 1024
 CHUNK_SIZE = 10000  # Number of rows to process at once
+
+
+####
+# Função para converter ObjectId para strings
+def convert_objectid_to_str(documents):
+    for document in documents:
+        for key, value in document.items():
+            if isinstance(value, ObjectId):
+                document[key] = str(value)
+    return documents
+
+# Função para carregar a coleção MongoDB diretamente para um DataFrame Polars com colunas específicas
+@st.cache_data
+def mongo_collection_to_polars(mongo_uri, db_name, collection_name, selected_columns):
+    # Conectar ao MongoDB
+    client = MongoClient(mongo_uri)
+    db = client[db_name]
+    collection = db[collection_name]
+
+    # Criar a projeção para trazer apenas as colunas desejadas
+    projection = {col: 1 for col in selected_columns}
+    projection["_id"] = 0  # Excluir o campo _id, se não for necessário
+
+    # Obter os documentos com as colunas selecionadas
+    documents = list(collection.find({}, projection))
+
+    # Converter ObjectId para strings
+    documents = convert_objectid_to_str(documents)
+
+    # Se não houver documentos, retornar um DataFrame vazio
+    if not documents:
+        return pl.DataFrame()
+
+    # Converter documentos em DataFrame Polars
+    try:
+        polars_df = pl.DataFrame(documents, infer_schema_length=1000)
+    except Exception as e:
+        st.error(f"Erro ao criar DataFrame Polars: {e}")
+        return pl.DataFrame()
+
+    return polars_df
+
+# Função para obter valores únicos das colunas, usando cache
+@st.cache_data
+def get_unique_values(df, column):
+    return df[column].unique().to_list()
+
+# Informações de conexão
+username = 'devpython86'
+password = 'dD@pjl06081420'
+cluster = 'cluster0.akbb8.mongodb.net'
+db_name = 'warehouse'  # Nome do banco de dados
+collection_name = 'po'
+
+# Escapar o nome de usuário e a senha
+escaped_username = urllib.parse.quote_plus(username)
+escaped_password = urllib.parse.quote_plus(password)
+
+# Montar a string de conexão
+MONGO_URI = f"mongodb+srv://{escaped_username}:{escaped_password}@{cluster}/{db_name}?retryWrites=true&w=majority"
+####    
+
+
 
 # Colunas selecionadas para salvar no arquivo final
 SELECTED_COLUMNS = [
@@ -252,7 +322,7 @@ class DataProcessor:
         except Exception as e:
             logger.error(f"Error in process_dataframe: {str(e)}")
             raise
-             
+                    
 class FileHandler:
     """Class to handle file operations"""
     
@@ -350,6 +420,7 @@ def main():
         st.session_state.download_triggered = False
     
     st.header("📑 Sistema de Processamento de Pedidos de Compra")
+     
     #st.subheader("📁 Seleção de Arquivos")
     tab1, tab2, tab3 = st.tabs(["📤 Upload e Extração", "📊 Visualização de Dados", "❓ Como Utilizar"])
 
@@ -377,6 +448,7 @@ def main():
                     label="⚡ Espaço disponível",
                     value=f"{remaining_size:.1f}MB"
                 )
+                            
         if uploaded_files:
             if st.button("🚀 Iniciar Processamento", use_container_width=True, type="primary"):
                 try:
@@ -427,6 +499,30 @@ def main():
                 except Exception as e:
                     logger.error(f"Error during processing: {str(e)}")
                     st.error(f"❌ Erro durante o processamento: {str(e)}")
+                    
+                    ###
+    # Carregar os dados do MongoDB
+    with st.spinner("Carregando dados..."):
+        #polars_df = mongo_collection_to_polars(MONGO_URI, db_name, collection_name)
+######
+        # Definir as colunas desejadas
+        selected_columns = ["Purchasing Document", "Project Code","Andritz WBS Element","codigo_projeto","Cost Center"]  
+        # Ajuste para as colunas que você quer
+
+        # Carregar os dados no DataFrame Polars
+        polars_df = mongo_collection_to_polars(MONGO_URI, db_name, collection_name, selected_columns)
+
+        # Mostrar o DataFrame no Streamlit
+        if not polars_df.is_empty():
+            st.write("DataFrame Polars:")
+            st.write(polars_df)
+
+            # Exemplo: Valores únicos de uma coluna específica
+            unique_values = get_unique_values(polars_df, "Purchasing Document")
+            st.write("Valores únicos:", unique_values)
+        else:
+            st.write("Nenhum documento encontrado.")
+    ###            
         
         if st.session_state.excel_data is not None:
             st.subheader("📥 Download do Arquivo Processado")

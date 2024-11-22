@@ -268,7 +268,7 @@ def main():
                             st.dataframe(
                                 df.to_pandas(),
                                 use_container_width=True,
-                                height=600
+                                #height=600
                             )
                         else:
                             st.warning("Nenhum resultado encontrado.")

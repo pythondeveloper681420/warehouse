@@ -437,6 +437,9 @@ def main():
             df['po'] = df['po'].apply(lambda x: extract_numbers(x) if len(extract_numbers(x)) == 10 else '')
             
             df['codigo_projeto'] = df['info_adic'].apply(extract_code)
+            df['codigo_projeto'] = df['codigo_projeto'].apply(
+                lambda x: int(x) if x != "" else ""
+            )    
             # # Função para truncar os primeiros 10 caracteres
             # def truncate_to_10_chars(text):
             #     return text[:10] if text else ""
@@ -455,8 +458,8 @@ def main():
 
             # Atualiza a coluna 'po' com o primeiro valor não vazio
             first_po_dict = get_first_non_empty_po(df)
-            df['po'] = df['chaveNfe'].map(first_po_dict)                   
-              
+            df['po'] = df['chaveNfe'].map(first_po_dict)      
+                          
             def format_date_to_brazilian(df, columns):
                 """
                 Converte as colunas especificadas para o formato de data brasileiro (dd/mm/aaaa).
@@ -491,6 +494,7 @@ def main():
                 return df
 
             # Aplicar a formatação desejada
+            
             df = format_date_to_brazilian(df, ['dVenc'])
                                         
             #Função para formatar colunas como moeda brasileira (BRL)
@@ -849,6 +853,17 @@ def main():
             groupby_cols_po = ['po']
             df['total_itens_po'] = df.groupby(groupby_cols_po )['qtd'].transform('sum')
             df['valor_recebido_po'] = df.groupby(groupby_cols_po )['vlTotProd'].transform('sum')
+            
+            # Lista de colunas que você quer limpar
+            # columns_to_clean = ['po']
+
+            # for col in columns_to_clean:
+            #     df[col] = (
+            #         df[col]
+            #         .astype(str)
+            #         .str.replace(r'\D', '', regex=True)  # Remove caracteres não numéricos
+            #         .astype(pd.Int64Dtype())             # Converte para Int64
+            #     )
                         
             df = df.sort_values(by=['dtEmi','nNf','itemNf'], ascending=[False,True,True])
 
@@ -858,32 +873,19 @@ def main():
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                     df.to_excel(writer, index=False, sheet_name='Invoices')
                 return output.getvalue()
-
-            def convert_df_to_pickle(df):
-                return pickle.dumps(df)
-            
+                       
             randon = datetime.now().strftime("%d%m%Y%H%M%S") + str(datetime.now().microsecond)[:3]
 
-            col1, col2 = st.columns(2)
+
+            excel_file = convert_df_to_excel(df)
+            st.download_button(
+                label="Download Excel",
+                data=excel_file,
+                file_name=f"NFSXML_{randon}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type='primary'
+            )
             
-            with col1:
-                excel_file = convert_df_to_excel(df)
-                st.download_button(
-                    label="Download Excel",
-                    data=excel_file,
-                    file_name=f"NFSXML_{randon}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-            with col2:
-                pickle_file = convert_df_to_pickle(df)
-                st.download_button(
-                    label="Download Pickle",
-                    data=pickle_file,
-                    file_name="processed_invoices.pkl",
-                    mime="application/octet-stream"
-                )
-
             st.success(f"Processed {len(uploaded_files)} XML files")
     with tab2:
         st.header("Visualização de Dados")
