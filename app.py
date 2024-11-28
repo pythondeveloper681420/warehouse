@@ -1,4 +1,5 @@
 #pip freeze > requirements.txt
+#pip install -r requirements.txt
 #python -m venv .venv
 #.venv\Scripts\activate.bat
 #streamlit run app.py
@@ -61,11 +62,11 @@ class Config:
         return datetime.now(timezone.utc)
 
     # Configurações do MongoDB
-    MONGO_USERNAME = urllib.parse.quote_plus('devpython86')
-    MONGO_PASSWORD = urllib.parse.quote_plus('dD@pjl06081420')
-    MONGO_CLUSTER = 'cluster0.akbb8.mongodb.net'
-    MONGO_DB = 'warehouse'
-    
+    MONGO_USERNAME = urllib.parse.quote_plus(st.secrets["MONGO_USERNAME"])
+    MONGO_PASSWORD = urllib.parse.quote_plus(st.secrets["MONGO_PASSWORD"])
+    MONGO_CLUSTER = st.secrets["MONGO_CLUSTER"]
+    MONGO_DB = st.secrets["MONGO_DB"]
+
     # Configurações de Email
     BREVO_API_KEY = get_brevo_api()
     SENDER_NAME = "Sistema Warehouse"

@@ -27,11 +27,11 @@ def convert_objectid_to_str(documents):
 
 # Função para carregar documentos do MongoDB com valores únicos de "Purchasing Document" e outras colunas
 @st.cache_data
-def mongo_collection_to_polars_with_unique_documents(mongo_uri, db_name, collection_name, selected_columns):
+def mongo_collection_to_polars_with_unique_documents(mongo_uri, db_name, collection_po, selected_columns):
     # Conectar ao MongoDB
     client = MongoClient(mongo_uri)
     db = client[db_name]
-    collection = db[collection_name]
+    collection = db[collection_po]
 
     # Construir o pipeline de agregação
     group_stage = {
@@ -66,11 +66,11 @@ def mongo_collection_to_polars_with_unique_documents(mongo_uri, db_name, collect
 
 # Função para carregar documentos do MongoDB com valores únicos de "codigo_projeto" e o primeiro valor de "Project Code"
 @st.cache_data
-def mongo_collection_to_polars_with_unique_codigo_projeto(mongo_uri, db_name, collection_name):
+def mongo_collection_to_polars_with_unique_codigo_projeto(mongo_uri, db_name, collection_po):
     # Conectar ao MongoDB
     client = MongoClient(mongo_uri)
     db = client[db_name]
-    collection = db[collection_name]
+    collection = db[collection_po]
 
     # Construir o pipeline de agregação
     group_stage = {
@@ -104,11 +104,11 @@ def mongo_collection_to_polars_with_unique_codigo_projeto(mongo_uri, db_name, co
     return polars_df
 
 # Informações de conexão
-username = 'devpython86'
-password = 'dD@pjl06081420'
-cluster = 'cluster0.akbb8.mongodb.net'
-db_name = 'warehouse'  # Nome do banco de dados
-collection_name = 'po'
+username = st.secrets["MONGO_USERNAME"]
+password = st.secrets["MONGO_PASSWORD"]
+cluster = st.secrets["MONGO_CLUSTER"]
+db_name = st.secrets["MONGO_DB"]  # Nome do banco de dados
+collection_po = 'po'
 
 # Escapar o nome de usuário e a senha
 escaped_username = urllib.parse.quote_plus(username)
@@ -134,10 +134,10 @@ with st.spinner("Carregando dados..."):
     selected_columns = ["Purchasing Document", "Project Code", "Andritz WBS Element", "codigo_projeto", "Cost Center"]
 
     # Carregar o primeiro DataFrame com valores únicos de "Purchasing Document"
-    polars_po = mongo_collection_to_polars_with_unique_documents(MONGO_URI, db_name, collection_name, selected_columns)
+    polars_po = mongo_collection_to_polars_with_unique_documents(MONGO_URI, db_name, collection_po, selected_columns)
 
     # Carregar o segundo DataFrame com valores únicos de "codigo_projeto"
-    polars_cod_project = mongo_collection_to_polars_with_unique_codigo_projeto(MONGO_URI, db_name, collection_name)
+    polars_cod_project = mongo_collection_to_polars_with_unique_codigo_projeto(MONGO_URI, db_name, collection_po)
 
     # Mostrar o primeiro DataFrame
     if not polars_po.is_empty():
@@ -998,155 +998,159 @@ def main():
             #     )
             
             # Conversão para Pandas
-            po_polars = polars_po.to_pandas()
-            cod_project_polars = polars_cod_project.to_pandas()
+            if polars_po.height > 0:
+                po_polars = polars_po.to_pandas()
+                cod_project_polars = polars_cod_project.to_pandas()
 
-            # Mesclagem 1: po_polars com df
-            df_merged = pd.merge(
-                df, 
-                po_polars, 
-                left_on="po", 
-                right_on="Purchasing Document", 
-                how="left"
-            )
-            
-            def convert_columns_to_numeric_po(df_merged, columns):
-                """Converte várias colunas para numérico, forçando erros para NaN."""
-                for column in columns:
-                    df_merged[column] = pd.to_numeric(df_merged[column], errors='coerce')
-                return df_merged
+                # Mesclagem 1: po_polars com df
+                df_merged = pd.merge(
+                    df, 
+                    po_polars, 
+                    left_on="po", 
+                    right_on="Purchasing Document", 
+                    how="left"
+                )
+                
+                def convert_columns_to_numeric_po(df_merged, columns):
+                    """Converte várias colunas para numérico, forçando erros para NaN."""
+                    for column in columns:
+                        df_merged[column] = pd.to_numeric(df_merged[column], errors='coerce')
+                    return df_merged
 
-            # Supondo que você queira converter as colunas 'po' e 'NFe'
-            columns_to_convert = ['codigo_projeto_x'] 
-            
-            # Converter as colunas relevantes para numérico
-            df_merged = convert_columns_to_numeric_po(df_merged, columns_to_convert)   
+                # Supondo que você queira converter as colunas 'po' e 'NFe'
+                columns_to_convert = ['codigo_projeto_x'] 
+                
+                # Converter as colunas relevantes para numérico
+                df_merged = convert_columns_to_numeric_po(df_merged, columns_to_convert)   
 
-            # #Garantir que ambas as colunas tenham o mesmo tipo e tratar valores ausentes
-            # df_merged["codigo_projeto_x"] = df_merged["codigo_projeto_x"].fillna("").astype(str)
-            # cod_project_polars["codigo_projeto"] = cod_project_polars["codigo_projeto"].fillna("").astype(str)
-            
-            def convert_columns_to_numeric_projects(cod_project_polars, columns):
-                """Converte várias colunas para numérico, forçando erros para NaN."""
-                for column in columns:
-                    cod_project_polars[column] = pd.to_numeric(cod_project_polars[column], errors='coerce')
-                return cod_project_polars
+                # #Garantir que ambas as colunas tenham o mesmo tipo e tratar valores ausentes
+                # df_merged["codigo_projeto_x"] = df_merged["codigo_projeto_x"].fillna("").astype(str)
+                # cod_project_polars["codigo_projeto"] = cod_project_polars["codigo_projeto"].fillna("").astype(str)
+                
+                def convert_columns_to_numeric_projects(cod_project_polars, columns):
+                    """Converte várias colunas para numérico, forçando erros para NaN."""
+                    for column in columns:
+                        cod_project_polars[column] = pd.to_numeric(cod_project_polars[column], errors='coerce')
+                    return cod_project_polars
 
-            # Supondo que você queira converter as colunas 'po' e 'NFe'
-            columns_to_convert = ['codigo_projeto'] 
-            
-            # Converter as colunas relevantes para numérico
-            cod_project_polars = convert_columns_to_numeric_projects(cod_project_polars, columns_to_convert)  
-            
-            # Mesclagem 2: df_merged com cod_project_polars
-            df_merged_projects = pd.merge(
-                df_merged, 
-                cod_project_polars, 
-                left_on="codigo_projeto_x", 
-                right_on="codigo_projeto", 
-                how="left"
-            )
-            
-            # Exibir apenas as colunas renomeadas
-            colunas_visiveis = ['nNf','itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','total_itens_nf','dtEmi','dVenc','chNfe',
-                                'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
-                                'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                'cfop','categoria','my_categoria',
-                                'po','codigo_projeto_y','Project Code_x','Andritz WBS Element','Cost Center','total_invoices_per_po','total_itens_po','valor_recebido_po',
-                                'codigo_projeto','Project Code_y',
-                                'unique']
-            
-            df_merged_projects= df_merged_projects[colunas_visiveis]
-            
-                        # Renomear as colunas
-            renomear_colunas = {
-                'nNf': 'Nota Fiscal',  
-                'itemNf': 'Item Nf',
-                'nomeMaterial': 'Nome Material',
-                'ncm': 'Codigo NCM',
-                'qtd': 'Quantidade',
-                'und': 'Unidade',
-                'vlUnProd': 'Valor Unitario Produto',
-                'vlTotProd': 'Valor Total Produto',
-                'vlTotalNf': 'Valor Total Nota Fiscal',
-                'total_itens_nf':'Total itens Nf',
-                'dtEmi': 'Data Emissao',
-                'dVenc': 'Data Vencimento',
-                'chNfe': 'Chave NF-e',
-                'emitNome': 'Nome Emitente',
-                'emitCnpj': 'CNPJ Emitente',
-                'emitLogr': 'Logradouro Emitente',
-                'emitNr': 'Numero Emitente',
-                'emitCompl': 'Complemento Emitente',
-                'emitBairro': 'Bairro Emitente',
-                'emitMunic': 'Municipio Emitente',
-                'emitUf': 'UF Emitente',
-                'emitCep': 'CEP Emitente',
-                'emitPais': 'Pais Emitente',
-                'destNome': 'Nome Destinatario',
-                'destCnpj': 'CNPJ Destinatario',
-                'destLogr': 'Logradouro Destinatario',
-                'destNr': 'Numero Destinatario',
-                'destCompl': 'Complemento Destinatario',
-                'destBairro': 'Bairro Destinatario',
-                'destMunic': 'Municipio Destinatario',
-                'destUf': 'UF Destinatario',
-                'destCep': 'CEP Destinatario',
-                'destPais': 'Pais Destinatario',
-                'cfop': 'CFOP',
-                'categoria': 'Categoria',
-                'my_categoria': 'Minha Categoria',
-                'po': 'PO',
-                'codigo_projeto_y': 'Codigo Projeto',
-                'Project Code_x': 'Projeto',
-                'Andritz WBS Element': 'WBS Andritz',
-                'Cost Center': 'Centro de Custo',
-                'total_invoices_per_po': 'NF recebidas PO',
-                'total_itens_po': 'Itens recebidos PO',
-                'valor_recebido_po': 'Valor Recebido PO',
-                'codigo_projeto': 'Codigo Projeto Envio',
-                'Project Code_y': 'Projeto Envio',
-                'unique': 'unique'
-            }
+                # Supondo que você queira converter as colunas 'po' e 'NFe'
+                columns_to_convert = ['codigo_projeto'] 
+                
+                # Converter as colunas relevantes para numérico
+                cod_project_polars = convert_columns_to_numeric_projects(cod_project_polars, columns_to_convert)  
+                
+                # Mesclagem 2: df_merged com cod_project_polars
+                df_merged_projects = pd.merge(
+                    df_merged, 
+                    cod_project_polars, 
+                    left_on="codigo_projeto_x", 
+                    right_on="codigo_projeto", 
+                    how="left"
+                )
+                
+                # Exibir apenas as colunas renomeadas
+                colunas_visiveis = ['nNf','itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','total_itens_nf','dtEmi','dVenc','chNfe',
+                                    'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
+                                    'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
+                                    'cfop','categoria','my_categoria',
+                                    'po','codigo_projeto_y','Project Code_x','Andritz WBS Element','Cost Center','total_invoices_per_po','total_itens_po','valor_recebido_po',
+                                    'codigo_projeto','Project Code_y',
+                                    'unique']
+                
+                df_merged_projects= df_merged_projects[colunas_visiveis]
+                
+                            # Renomear as colunas
+                renomear_colunas = {
+                    'nNf': 'Nota Fiscal',  
+                    'itemNf': 'Item Nf',
+                    'nomeMaterial': 'Nome Material',
+                    'ncm': 'Codigo NCM',
+                    'qtd': 'Quantidade',
+                    'und': 'Unidade',
+                    'vlUnProd': 'Valor Unitario Produto',
+                    'vlTotProd': 'Valor Total Produto',
+                    'vlTotalNf': 'Valor Total Nota Fiscal',
+                    'total_itens_nf':'Total itens Nf',
+                    'dtEmi': 'Data Emissao',
+                    'dVenc': 'Data Vencimento',
+                    'chNfe': 'Chave NF-e',
+                    'emitNome': 'Nome Emitente',
+                    'emitCnpj': 'CNPJ Emitente',
+                    'emitLogr': 'Logradouro Emitente',
+                    'emitNr': 'Numero Emitente',
+                    'emitCompl': 'Complemento Emitente',
+                    'emitBairro': 'Bairro Emitente',
+                    'emitMunic': 'Municipio Emitente',
+                    'emitUf': 'UF Emitente',
+                    'emitCep': 'CEP Emitente',
+                    'emitPais': 'Pais Emitente',
+                    'destNome': 'Nome Destinatario',
+                    'destCnpj': 'CNPJ Destinatario',
+                    'destLogr': 'Logradouro Destinatario',
+                    'destNr': 'Numero Destinatario',
+                    'destCompl': 'Complemento Destinatario',
+                    'destBairro': 'Bairro Destinatario',
+                    'destMunic': 'Municipio Destinatario',
+                    'destUf': 'UF Destinatario',
+                    'destCep': 'CEP Destinatario',
+                    'destPais': 'Pais Destinatario',
+                    'cfop': 'CFOP',
+                    'categoria': 'Categoria',
+                    'my_categoria': 'Minha Categoria',
+                    'po': 'PO',
+                    'codigo_projeto_y': 'Codigo Projeto',
+                    'Project Code_x': 'Projeto',
+                    'Andritz WBS Element': 'WBS Andritz',
+                    'Cost Center': 'Centro de Custo',
+                    'total_invoices_per_po': 'NF recebidas PO',
+                    'total_itens_po': 'Itens recebidos PO',
+                    'valor_recebido_po': 'Valor Recebido PO',
+                    'codigo_projeto': 'Codigo Projeto Envio',
+                    'Project Code_y': 'Projeto Envio',
+                    'unique': 'unique'
+                }
 
-            # Aplicar a renomeação
-            df_merged_projects = df_merged_projects.rename(columns=renomear_colunas)
-            
-            df_merged_projects = df_merged_projects.sort_values(by=['Data Emissao','Nota Fiscal','Item Nf'], ascending=[False,True,True])
+                # Aplicar a renomeação
+                df_merged_projects = df_merged_projects.rename(columns=renomear_colunas)
+                
+                df_merged_projects = df_merged_projects.sort_values(by=['Data Emissao','Nota Fiscal','Item Nf'], ascending=[False,True,True])
 
-            df=df_merged_projects
-            
-            
+                df=df_merged_projects
+                
+                
+                            
+                #df = df.sort_values(by=['dtEmi','nNf','itemNf'], ascending=[False,True,True])
+
+                # Download buttons
+                def convert_df_to_excel(df):
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Invoices')
+                    return output.getvalue()
                         
-            #df = df.sort_values(by=['dtEmi','nNf','itemNf'], ascending=[False,True,True])
-
-            # Download buttons
-            def convert_df_to_excel(df):
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Invoices')
-                return output.getvalue()
-                       
-            randon = datetime.now().strftime("%d%m%Y%H%M%S") + str(datetime.now().microsecond)[:3]
+                randon = datetime.now().strftime("%d%m%Y%H%M%S") + str(datetime.now().microsecond)[:3]
 
 
-            excel_file = convert_df_to_excel(df)
-            st.download_button(
-                label="Download Excel",
-                data=excel_file,
-                file_name=f"NFSXML_{randon}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type='primary'
-            )
-            
-            st.success(f"Processed {len(uploaded_files)} XML files")
+                excel_file = convert_df_to_excel(df)
+                st.download_button(
+                    label="Download Excel",
+                    data=excel_file,
+                    file_name=f"NFSXML_{randon}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type='primary'
+                )
+                
+                st.success(f"Processed {len(uploaded_files)} XML files")
+            else:
+                st.warning("Primeiro processe alguns arquivos de PO")
+
     with tab2:
         st.header("Visualização de Dados")
         if 'df' in locals():
-            st.text(len(df_merged))
-            st.text(len(df_merged_projects))
-            st.dataframe(df_merged)
-            st.dataframe(df_merged_projects)
+            # st.text(len(df_merged))
+            # st.text(len(df_merged_projects))
+            # st.dataframe(df_merged)
+            # st.dataframe(df_merged_projects)
             # # Key Metrics
             # col1, col2, col3 = st.columns(3)
             

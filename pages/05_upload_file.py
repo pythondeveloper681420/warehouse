@@ -62,10 +62,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Configurações do MongoDB
-USERNAME = urllib.parse.quote_plus('devpython86')
-PASSWORD = urllib.parse.quote_plus('dD@pjl06081420')
-CLUSTER = 'cluster0.akbb8.mongodb.net'
-DB_NAME = 'warehouse'
+USERNAME = urllib.parse.quote_plus(st.secrets["MONGO_USERNAME"])
+PASSWORD = urllib.parse.quote_plus(st.secrets["MONGO_PASSWORD"])
+CLUSTER = st.secrets["MONGO_CLUSTER"]
+DB_NAME = st.secrets["MONGO_DB"]
 MAX_RETRIES = 5
 RETRY_DELAY = 3
 CONNECTION_TIMEOUT = 30000    # 30 segundos

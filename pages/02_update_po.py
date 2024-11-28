@@ -59,13 +59,13 @@ SELECTED_COLUMNS = [
     'valor_item_com_impostos_formatted',
     'Net order value_formatted',
     'total_valor_po_liquido_formatted',
-    'total_valor_po_com_impostos_formatted',
-    
+    'total_valor_po_com_impostos_formatted',    
     'Purchasing Group',
-    'Plant',           
-    
+    'Plant',               
     'unique'
 ]
+
+#Document Date
 
 class DataProcessor:
     """Class to handle all data processing operations"""    
@@ -159,7 +159,7 @@ class DataProcessor:
             # df_processed.loc[:, 'unique'] = df_processed['Purchasing Document'].astype(str) + df_processed['Item'].astype(str)
 
             # Garantir que a coluna 'Supplier' seja tratada como string (para evitar problemas com valores não numéricos)
-            #df_processed['Supplier'] = df_processed['Supplier'].astype(str)
+            df_processed['Supplier'] = df_processed['Supplier'].astype(str)
             
             df_processed = df_processed.drop_duplicates(subset=['unique'])
             
@@ -234,14 +234,15 @@ class DataProcessor:
             
                      
             # Lista de colunas que você quer limpar
-            columns_to_clean = ['unique', 'Purchasing Document', 'Item', 'Material']
+            columns_to_clean = [ 'Purchasing Document', 'Item', 'Material']
 
             for col in columns_to_clean:
-                df_processed[col] = (
-                    df_processed[col]
-                    .astype(str)
+                df[col] = (
+                    df[col]                          # Seleciona a coluna
+                    .astype(str)                     # Converte para string
                     .str.replace(r'\D', '', regex=True)  # Remove caracteres não numéricos
-                    .astype(pd.Int64Dtype())             # Converte para Int64
+                    .replace('', pd.NA)             # Substitui strings vazias por NaN
+                    .astype(pd.Int64Dtype())         # Converte para Int64 (com suporte a NaN)
                 )
             
             df_processed = df_processed[SELECTED_COLUMNS] 
@@ -489,12 +490,12 @@ def main():
 
             for col in columns_to_clean:
                 df[col] = (
-                    df[col]
-                    .astype(str)
+                    df[col]                          # Seleciona a coluna
+                    .astype(str)                     # Converte para string
                     .str.replace(r'\D', '', regex=True)  # Remove caracteres não numéricos
-                    .astype(pd.Int64Dtype())             # Converte para Int64
+                    .replace('', pd.NA)             # Substitui strings vazias por NaN
+                    .astype(pd.Int64Dtype())         # Converte para Int64 (com suporte a NaN)
                 )
-            
             
             
             
