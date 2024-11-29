@@ -13,6 +13,9 @@ from datetime import datetime, timedelta, timezone
 import re
 from dotenv import load_dotenv
 import os
+import sendgrid
+from sendgrid.helpers.mail import Mail, Email, To, Content
+import os
 
 # Configuração da página
 st.set_page_config(
@@ -48,13 +51,13 @@ class Config:
     """Classe de configuração com todas as constantes e configurações do sistema"""
     
     @staticmethod
-    def get_brevo_api():
-        """Obtém a chave API do Brevo das variáveis de ambiente ou secrets do Streamlit"""
+    def get_sendgrid_api():
+        """Obtém a chave API do SendGrid das variáveis de ambiente ou secrets do Streamlit"""
         try:
-            return st.secrets["BREVO_API_KEY"]
+            return st.secrets["SENDGRID_API_KEY"]
         except:
             load_dotenv()
-            return os.getenv("BREVO_API_KEY")
+            return os.getenv("SENDGRID_API_KEY")
 
     @staticmethod
     def get_current_utc_time():
@@ -68,9 +71,9 @@ class Config:
     MONGO_DB = st.secrets["MONGO_DB"]
 
     # Configurações de Email
-    BREVO_API_KEY = get_brevo_api()
+    SENDGRID_API_KEY = get_sendgrid_api()
     SENDER_NAME = "Sistema Warehouse"
-    SENDER_EMAIL = "pythondeveloper681420@gmail.com"
+    SENDER_EMAIL = "daniel.albuquerque@andritz.com"
     
     # URLs do sistema
     DEV_URL = "http://localhost:8501"
@@ -154,15 +157,10 @@ class MongoDBManager:
             return False
 
 class EmailManager:
-    """Classe para gerenciar o envio de emails"""
+    """Classe para gerenciar o envio de emails com SendGrid"""
     
     def __init__(self):
-        self.api_url = "https://api.brevo.com/v3/smtp/email"
-        self.headers = {
-            "accept": "application/json",
-            "api-key": Config.BREVO_API_KEY,
-            "content-type": "application/json"
-        }
+        self.sg_client = sendgrid.SendGridAPIClient(api_key=Config.SENDGRID_API_KEY)
     
     def send_validation_email(self, email, token, name):
         """Envia email de validação para um novo usuário"""
@@ -170,26 +168,23 @@ class EmailManager:
             base_url = Config.PROD_URL if not st.session_state.get('dev_mode', False) else Config.DEV_URL
             validation_url = f"{base_url}?token={token}"
             
-            payload = {
-                "sender": {
-                    "name": Config.SENDER_NAME,
-                    "email": Config.SENDER_EMAIL
-                },
-                "to": [{
-                    "email": email,
-                    "name": name
-                }],
-                "subject": "Validação de Conta - Sistema Warehouse",
-                "htmlContent": self._get_email_template(validation_url, name)
-            }
+            from_email = Email(Config.SENDER_EMAIL, Config.SENDER_NAME)
+            to_email = To(email, name)
+            subject = "Validação de Conta - Sistema Warehouse"
+            content = Content(
+                "text/html", 
+                self._get_email_template(validation_url, name)
+            )
+
+            mail = Mail(from_email, to_email, subject, content)
             
-            response = requests.post(self.api_url, headers=self.headers, json=payload)
+            response = self.sg_client.send(mail)
             
-            if response.status_code in [200, 201]:
+            if response.status_code in [200, 202]:
                 st.info(f"Email de validação enviado para {email}")
                 return True
             else:
-                st.error(f"Erro ao enviar email: {response.text}")
+                st.error(f"Erro ao enviar email: {response.body}")
                 return False
                 
         except Exception as e:
