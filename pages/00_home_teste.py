@@ -9,24 +9,69 @@ import io
 import math
 
 def normalizar_string(texto):
+    """
+    Normaliza uma string removendo acentos, 
+    caracteres especiais, e convertendo para minúsculas.
+    
+    Args:
+        texto (str): Texto a ser normalizado
+    
+    Returns:
+        str: Texto normalizado
+    """
     if not isinstance(texto, str):
         return str(texto)
-    texto = unicodedata.normalize('NFKD', texto)
+    
+    # Converte para minúsculas
+    texto = texto.lower()
+    
+    # Remove acentos
+    texto = ''.join(
+        char for char in unicodedata.normalize('NFKD', texto)
+        if unicodedata.category(char) != 'Mn'
+    )
+    
+    # Remove caracteres especiais, mantendo espaços
     texto = re.sub(r'[^\w\s]', '', texto)
-    return texto.lower()
+    
+    return texto
 
-def converter_documento_para_pandas(doc):
-    documento_convertido = {}
-    for chave, valor in doc.items():
-        if isinstance(valor, ObjectId):
-            documento_convertido[chave] = str(valor)
-        elif isinstance(valor, dict):
-            documento_convertido[chave] = converter_documento_para_pandas(valor)
-        elif isinstance(valor, list):
-            documento_convertido[chave] = [str(item) if isinstance(item, ObjectId) else item for item in valor]
-        else:
-            documento_convertido[chave] = valor
-    return documento_convertido
+def criar_padrao_flexivel(texto):
+    """
+    Cria um padrão de regex flexível para busca com fragmentos de palavras.
+    
+    Args:
+        texto (str): Texto a ser transformado em padrão de busca
+    
+    Returns:
+        str: Padrão de regex para busca flexível
+    """
+    # Normaliza o texto
+    texto_normalizado = normalizar_string(texto)
+    
+    # Divide o texto em fragmentos
+    fragmentos = texto_normalizado.split()
+    
+    # Cria um padrão que garante que todos os fragmentos estejam presentes
+    # em qualquer ordem e de forma parcial
+    padrao = '.*'.join(
+        f'(?=.*{re.escape(fragmento)})' for fragmento in fragmentos
+    )
+    
+    return padrao + '.*'
+
+# def converter_documento_para_pandas(doc):
+#     documento_convertido = {}
+#     for chave, valor in doc.items():
+#         if isinstance(valor, ObjectId):
+#             documento_convertido[chave] = str(valor)
+#         elif isinstance(valor, dict):
+#             documento_convertido[chave] = converter_documento_para_pandas(valor)
+#         elif isinstance(valor, list):
+#             documento_convertido[chave] = [str(item) if isinstance(item, ObjectId) else item for item in valor]
+#         else:
+#             documento_convertido[chave] = valor
+#     return documento_convertido
 
 @st.cache_resource
 def obter_cliente_mongodb():
@@ -73,7 +118,7 @@ def obter_valores_unicos_do_banco_de_dados(nome_colecao, coluna):
     pipeline = [
         {"$group": {"_id": f"${coluna}"}},
         {"$sort": {"_id": 1}},
-        {"$limit": 1000}
+        {"$limit": 100000}
     ]
     
     try:
@@ -83,7 +128,41 @@ def obter_valores_unicos_do_banco_de_dados(nome_colecao, coluna):
         st.error(f"Erro ao obter valores únicos para {coluna}: {str(e)}")
         return []
 
-def construir_consulta_mongo(filtros):
+def converter_para_numerico(valor):
+    """
+    Tenta converter o valor para numérico.
+    
+    Args:
+        valor (str): Valor a ser convertido
+    
+    Returns:
+        Union[int, float, str]: Valor numérico ou original
+    """
+    # Remove espaços e substitui vírgula por ponto
+    valor_limpo = str(valor).strip().replace(',', '.')
+    
+    try:
+        # Tenta converter para inteiro primeiro
+        return int(valor_limpo)
+    except ValueError:
+        try:
+            # Se não for inteiro, tenta converter para float
+            return float(valor_limpo)
+        except ValueError:
+            # Se não for possível converter, retorna o valor original
+            return valor
+
+def construir_consulta_mongo(filtros, colunas_tipos):
+    """
+    Constrói uma consulta MongoDB com filtros flexíveis.
+    
+    Args:
+        filtros (dict): Dicionário de filtros
+        colunas_tipos (dict): Dicionário com tipos de colunas
+    
+    Returns:
+        dict: Consulta MongoDB
+    """
     consulta = {}
     
     for coluna, info_filtro in filtros.items():
@@ -92,14 +171,56 @@ def construir_consulta_mongo(filtros):
         
         if not valor_filtro:
             continue
-            
+        
+        # Verifica se a coluna é numérica
+        if colunas_tipos.get(coluna, 'str') in ['int64', 'float64']:
+            # Tenta converter o valor para numérico
+            try:
+                valor_numerico = converter_para_numerico(valor_filtro)
+                
+                # Se for um número, usa consulta exata
+                if isinstance(valor_numerico, (int, float)):
+                    consulta[coluna] = valor_numerico
+                    continue
+            except:
+                pass
+        
         if tipo_filtro == 'text':
-            consulta[coluna] = {'$regex': valor_filtro, '$options': 'i'}
+            # Cria padrão flexível para busca
+            padrao_flexivel = criar_padrao_flexivel(valor_filtro)
+            
+            consulta[coluna] = {
+                '$regex': padrao_flexivel, 
+                '$options': 'i'
+            }
         elif tipo_filtro == 'multi':
             if len(valor_filtro) > 0:
                 consulta[coluna] = {'$in': valor_filtro}
     
     return consulta
+
+def converter_documento_para_pandas(doc):
+    """
+    Converte um documento MongoDB para um formato compatível com Pandas.
+    
+    Args:
+        doc (dict): Documento MongoDB
+    
+    Returns:
+        dict: Documento convertido
+    """
+    documento_convertido = {}
+    for chave, valor in doc.items():
+        if isinstance(valor, ObjectId):
+            documento_convertido[chave] = str(valor)
+        elif isinstance(valor, dict):
+            documento_convertido[chave] = converter_documento_para_pandas(valor)
+        elif isinstance(valor, list):
+            documento_convertido[chave] = [str(item) if isinstance(item, ObjectId) else item for item in valor]
+        else:
+            documento_convertido[chave] = valor
+    return documento_convertido
+
 
 def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None):
     cliente = obter_cliente_mongodb()
@@ -126,8 +247,14 @@ def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None)
     except Exception as e:
         st.error(f"Erro ao carregar dados: {str(e)}")
         return pd.DataFrame(), 0
-
+#obter_colunas_com_tipos
 def criar_interface_filtros(nome_colecao, colunas):
+    """
+    Cria interface de filtros com suporte a colunas numéricas e de texto.
+    """
+    # Obtém tipos de colunas
+    colunas_tipos = obter_colunas_com_tipos(nome_colecao) or {}
+    
     filtros = {}
     
     with st.expander("🔍 Filtros", expanded=False):
@@ -138,22 +265,26 @@ def criar_interface_filtros(nome_colecao, colunas):
         )
         
         if colunas_selecionadas:
+            # Usa duas colunas para layout
             cols = st.columns(2)
+            
             for idx, coluna in enumerate(colunas_selecionadas):
                 with cols[idx % 2]:
                     st.markdown(f"#### {coluna}")
                     
-                    chave_tipo_filtro = f"filter_type_{nome_colecao}_{coluna}"
+                    # Verifica se a coluna é numérica
+                    tipo_coluna = colunas_tipos.get(coluna, 'str')
+                    
                     tipo_filtro = st.radio(
                         "Tipo de filtro:",
                         ["Texto", "Seleção Múltipla"],
-                        key=chave_tipo_filtro,
+                        key=f"radio_{nome_colecao}_{coluna}",
                         horizontal=True
                     )
                     
                     if tipo_filtro == "Texto":
                         valor = st.text_input(
-                            "Buscar:",
+                            f"Buscar {coluna}" + (" (numérico)" if tipo_coluna in ['int64', 'float64'] else ""),
                             key=f"text_filter_{nome_colecao}_{coluna}"
                         )
                         if valor:
@@ -172,7 +303,93 @@ def criar_interface_filtros(nome_colecao, colunas):
                     
                     st.markdown("---")
     
-    return filtros
+    return filtros, colunas_tipos
+
+def obter_colunas_com_tipos(nome_colecao):
+    """
+    Obtém os tipos de colunas da coleção.
+    
+    Args:
+        nome_colecao (str): Nome da coleção
+    
+    Returns:
+        dict: Dicionário de tipos de colunas
+    """
+    try:
+        cliente = obter_cliente_mongodb()
+        banco_dados = cliente.warehouse
+        colecao = banco_dados[nome_colecao]
+        
+        documento_exemplo = colecao.find_one()
+        
+        if not documento_exemplo:
+            st.warning(f"Nenhum documento encontrado na coleção {nome_colecao}")
+            return {}
+        
+        # Função para determinar o tipo
+        def determinar_tipo(valor):
+            if valor is None:
+                return 'str'
+            if isinstance(valor, int):
+                return 'int64'
+            elif isinstance(valor, float):
+                return 'float64'
+            elif isinstance(valor, str):
+                # Tenta converter string para número
+                try:
+                    int(valor.replace(',', ''))
+                    return 'int64'
+                except ValueError:
+                    try:
+                        float(valor.replace(',', '.'))
+                        return 'float64'
+                    except ValueError:
+                        return 'str'
+            return 'str'
+        
+        tipos_colunas = {}
+        for chave, valor in documento_exemplo.items():
+            if chave != '_id':
+                tipos_colunas[chave] = determinar_tipo(valor)
+        
+        return tipos_colunas
+    
+    except Exception as e:
+        st.error(f"Erro ao obter tipos de colunas: {str(e)}")
+        return {}
+    
+def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None, colunas_tipos=None):
+    """
+    Modificação da função original para suportar filtros numéricos
+    """
+    # Ensure colunas_tipos is a dictionary
+    if colunas_tipos is None:
+        colunas_tipos = obter_colunas_com_tipos(nome_colecao)
+    
+    cliente = obter_cliente_mongodb()
+    banco_dados = cliente.warehouse
+    colecao = banco_dados[nome_colecao]
+    
+    consulta = construir_consulta_mongo(filtros, colunas_tipos) if filtros else {}
+    pular = (pagina - 1) * tamanho_pagina
+    
+    try:
+        total_filtrado = colecao.count_documents(consulta)
+        cursor = colecao.find(consulta).skip(pular).limit(tamanho_pagina)
+        documentos = [converter_documento_para_pandas(doc) for doc in cursor]
+        
+        if documentos:
+            df = pd.DataFrame(documentos)
+            if '_id' in df.columns:
+                df = df.drop('_id', axis=1)
+        else:
+            df = pd.DataFrame()
+            
+        return df, total_filtrado
+        
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {str(e)}")
+        return pd.DataFrame(), 0
 
 def exibir_pagina_dados(nome_colecao):
     total_documentos, colunas, colunas_visiveis_padrao = obter_colunas_colecao(nome_colecao)
@@ -199,7 +416,8 @@ def exibir_pagina_dados(nome_colecao):
             st.session_state[f'colunas_visiveis_{nome_colecao}'] = colunas_visiveis_padrao
             st.rerun()
     
-    filtros = criar_interface_filtros(nome_colecao, colunas)
+    # Passa tipos de colunas para a função de filtros
+    filtros, colunas_tipos = criar_interface_filtros(nome_colecao, colunas)
     
     with st.container():
         col1, col2, col3 = st.columns([1,1,1])
@@ -218,7 +436,14 @@ def exibir_pagina_dados(nome_colecao):
             st.session_state[f'pagina_{nome_colecao}'] = 1
         pagina_atual = st.session_state[f'pagina_{nome_colecao}']
         
-        df, total_filtrado = carregar_dados_paginados(nome_colecao, pagina_atual, tamanho_pagina, filtros)
+        # Passa tipos de colunas para carregamento de dados
+        df, total_filtrado = carregar_dados_paginados(
+            nome_colecao, 
+            pagina_atual, 
+            tamanho_pagina, 
+            filtros, 
+            colunas_tipos
+        )
         
         # Filtrar colunas com base na seleção
         if not df.empty and colunas_visiveis:
@@ -249,7 +474,7 @@ def exibir_pagina_dados(nome_colecao):
             if cols[3].button("⏩", key=f"ultima_{nome_colecao}"):
                 st.session_state[f'pagina_{nome_colecao}'] = total_paginas
                 st.rerun()
-    
+
     def formatar_numero(valor):
             """
             Formata números para exibição em padrão brasileiro

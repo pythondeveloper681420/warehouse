@@ -9,24 +9,69 @@ import io
 import math
 
 def normalizar_string(texto):
+    """
+    Normaliza uma string removendo acentos, 
+    caracteres especiais, e convertendo para minúsculas.
+    
+    Args:
+        texto (str): Texto a ser normalizado
+    
+    Returns:
+        str: Texto normalizado
+    """
     if not isinstance(texto, str):
         return str(texto)
-    texto = unicodedata.normalize('NFKD', texto)
+    
+    # Converte para minúsculas
+    texto = texto.lower()
+    
+    # Remove acentos
+    texto = ''.join(
+        char for char in unicodedata.normalize('NFKD', texto)
+        if unicodedata.category(char) != 'Mn'
+    )
+    
+    # Remove caracteres especiais, mantendo espaços
     texto = re.sub(r'[^\w\s]', '', texto)
-    return texto.lower()
+    
+    return texto
 
-def converter_documento_para_pandas(doc):
-    documento_convertido = {}
-    for chave, valor in doc.items():
-        if isinstance(valor, ObjectId):
-            documento_convertido[chave] = str(valor)
-        elif isinstance(valor, dict):
-            documento_convertido[chave] = converter_documento_para_pandas(valor)
-        elif isinstance(valor, list):
-            documento_convertido[chave] = [str(item) if isinstance(item, ObjectId) else item for item in valor]
-        else:
-            documento_convertido[chave] = valor
-    return documento_convertido
+def criar_padrao_flexivel(texto):
+    """
+    Cria um padrão de regex flexível para busca com fragmentos de palavras.
+    
+    Args:
+        texto (str): Texto a ser transformado em padrão de busca
+    
+    Returns:
+        str: Padrão de regex para busca flexível
+    """
+    # Normaliza o texto
+    texto_normalizado = normalizar_string(texto)
+    
+    # Divide o texto em fragmentos
+    fragmentos = texto_normalizado.split()
+    
+    # Cria um padrão que garante que todos os fragmentos estejam presentes
+    # em qualquer ordem e de forma parcial
+    padrao = '.*'.join(
+        f'(?=.*{re.escape(fragmento)})' for fragmento in fragmentos
+    )
+    
+    return padrao + '.*'
+
+# def converter_documento_para_pandas(doc):
+#     documento_convertido = {}
+#     for chave, valor in doc.items():
+#         if isinstance(valor, ObjectId):
+#             documento_convertido[chave] = str(valor)
+#         elif isinstance(valor, dict):
+#             documento_convertido[chave] = converter_documento_para_pandas(valor)
+#         elif isinstance(valor, list):
+#             documento_convertido[chave] = [str(item) if isinstance(item, ObjectId) else item for item in valor]
+#         else:
+#             documento_convertido[chave] = valor
+#     return documento_convertido
 
 @st.cache_resource
 def obter_cliente_mongodb():
@@ -84,6 +129,15 @@ def obter_valores_unicos_do_banco_de_dados(nome_colecao, coluna):
         return []
 
 def construir_consulta_mongo(filtros):
+    """
+    Constrói uma consulta MongoDB com filtros flexíveis.
+    
+    Args:
+        filtros (dict): Dicionário de filtros
+    
+    Returns:
+        dict: Consulta MongoDB
+    """
     consulta = {}
     
     for coluna, info_filtro in filtros.items():
@@ -92,14 +146,43 @@ def construir_consulta_mongo(filtros):
         
         if not valor_filtro:
             continue
-            
+        
         if tipo_filtro == 'text':
-            consulta[coluna] = {'$regex': valor_filtro, '$options': 'i'}
+            # Cria padrão flexível para busca
+            padrao_flexivel = criar_padrao_flexivel(valor_filtro)
+            
+            consulta[coluna] = {
+                '$regex': padrao_flexivel, 
+                '$options': 'i'
+            }
         elif tipo_filtro == 'multi':
             if len(valor_filtro) > 0:
                 consulta[coluna] = {'$in': valor_filtro}
     
     return consulta
+
+def converter_documento_para_pandas(doc):
+    """
+    Converte um documento MongoDB para um formato compatível com Pandas.
+    
+    Args:
+        doc (dict): Documento MongoDB
+    
+    Returns:
+        dict: Documento convertido
+    """
+    documento_convertido = {}
+    for chave, valor in doc.items():
+        if isinstance(valor, ObjectId):
+            documento_convertido[chave] = str(valor)
+        elif isinstance(valor, dict):
+            documento_convertido[chave] = converter_documento_para_pandas(valor)
+        elif isinstance(valor, list):
+            documento_convertido[chave] = [str(item) if isinstance(item, ObjectId) else item for item in valor]
+        else:
+            documento_convertido[chave] = valor
+    return documento_convertido
+
 
 def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None):
     cliente = obter_cliente_mongodb()
