@@ -19,7 +19,7 @@ import os
 
 # Configuração da página
 st.set_page_config(
-    page_title="Warehouse App",
+    page_title="WarehouseApp",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -457,7 +457,7 @@ class WarehouseApp:
         # Layout da página de login
         col1, col2 = st.columns([2, 1])
         
-        col1.title("Sistema Warehouse")
+        col1.title("WarehouseApp")
         
         # Verifica se há um token de validação na URL
         token = st.query_params.get("token")
