@@ -256,8 +256,11 @@ def criar_interface_filtros(nome_colecao, colunas):
     colunas_tipos = obter_colunas_com_tipos(nome_colecao) or {}
     
     filtros = {}
-    
-    with st.expander("🔍 Filtros", expanded=False):
+
+            # Texto em markdown
+    texto = ('**Filtros:**')   
+    # Seleção de visibilidade de colunas
+    with st.expander(label=texto, expanded=False):
         colunas_selecionadas = st.multiselect(
             "Selecione as colunas para filtrar:",
             colunas,
@@ -398,8 +401,10 @@ def exibir_pagina_dados(nome_colecao):
         st.error(f"Nenhum documento encontrado na coleção {nome_colecao}")
         return
         
+        # Texto em markdown
+    texto = ('**Colunas Visíveis:**')   
     # Seleção de visibilidade de colunas
-    with st.expander("👁️ Colunas Visíveis", expanded=False):
+    with st.expander(label=texto, expanded=False):
         if f'colunas_visiveis_{nome_colecao}' not in st.session_state:
             st.session_state[f'colunas_visiveis_{nome_colecao}'] = colunas_visiveis_padrao
             
@@ -419,10 +424,15 @@ def exibir_pagina_dados(nome_colecao):
     # Passa tipos de colunas para a função de filtros
     filtros, colunas_tipos = criar_interface_filtros(nome_colecao, colunas)
     
-    with st.container():
-        col1, col2, col3 = st.columns([1,1,1])
+    
+    # Texto em markdown
+    texto = ('**Configurações:**')
+
+    # Mostrar o texto com expander
+    with st.expander(label=texto, expanded=False):
+        col1, col2, col3 = st.columns([1,1,1],gap='small')
         with col1:
-            c1, c2 = st.columns([1, 1])
+            c1, c2 = st.columns([2, 1])
             c1.write('Registros por página:')
             tamanho_pagina = c2.selectbox(
                 "Registros por página:",
@@ -550,14 +560,16 @@ def exibir_pagina_dados(nome_colecao):
 
 def principal():
     st.set_page_config(
-        page_title="Dashboard MongoDB",
+        page_title="Home",
         page_icon="📊",
         layout="wide"
     )
 
-    st.subheader("📊 Visualização dos Dados")
+
+    # Título h1 em negrito
+    st.markdown('## **📊 :rainbow[Home]**')
     
-    colecoes = ['xml', 'po', 'nfspdf']
+    colecoes = ['xml', 'nfspdf','po',]
     abas = st.tabs([colecao.upper() for colecao in colecoes])
     
     for aba, nome_colecao in zip(abas, colecoes):
