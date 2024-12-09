@@ -1,153 +1,221 @@
 import streamlit as st
 import pandas as pd
 import polars as pl
-from pymongo import MongoClient
+import plotly.express as px
+import plotly.graph_objects as go
 import urllib.parse
+from pymongo import MongoClient
 from bson.objectid import ObjectId
+from typing import List, Dict, Any
 
-# Função para converter ObjectId para strings
-def convert_objectid_to_str(documents):
-    for document in documents:
-        for key, value in document.items():
-            if isinstance(value, ObjectId):
-                document[key] = str(value)
-    return documents
+def converter_objectid_para_str(documentos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Converter MongoDB ObjectId para string para serialização JSON."""
+    for documento in documentos:
+        for chave, valor in documento.items():
+            if isinstance(valor, ObjectId):
+                documento[chave] = str(valor)
+    return documentos
 
-# Função para realizar join entre collections
 @st.cache_data
-def mongo_collection_join(mongo_uri, db_name, collection_po, collection_xml):
-    # Conectar ao MongoDB
-    client = MongoClient(mongo_uri)
-    db = client[db_name]
-    collection_po_db = db[collection_po]
-    collection_xml_db = db[collection_xml]
+def buscar_dados_mongo(
+    uri_mongo: str, 
+    nome_bd: str, 
+    nome_colecao: str, 
+    campo_agrupamento: str,
+    colunas_selecionadas: List[str]
+) -> pl.DataFrame:
+    """
+    Buscar documentos da coleção MongoDB.
+    """
+    try:
+        cliente = MongoClient(uri_mongo)
+        bd = cliente[nome_bd]
+        colecao = bd[nome_colecao]
 
-    # Pipeline de agregação para join
-    join_pipeline = [
-        # Estágio de junção (lookup)
-        {
-            "$lookup": {
-                "from": collection_po,  # Nome da collection de Purchase Orders
-                "localField": "PO",  # Campo na collection XML
-                "foreignField": "Purchasing Document",  # Campo na collection PO
-                "as": "po_details"
-            }
-        },
-        # Desenredar os resultados do lookup
-        {
-            "$unwind": {
-                "path": "$po_details",
-                "preserveNullAndEmptyArrays": True  # Manter documentos XML mesmo sem correspondência em PO
-            }
-        },
-        # Projeção para incluir TODOS os campos
-        {
-            "$project": {
-                # Campos da collection XML
-                **{k: 1 for k in collection_xml_db.find_one().keys()},
-                # Campos da collection PO prefixados
-                **{f"po_{k}": f"$po_details.{k}" for k in collection_po_db.find_one().keys()}
-            }
-        }
+        documentos = list(colecao.find())
+        documentos = converter_objectid_para_str(documentos)
+
+        return pl.DataFrame(documentos, infer_schema_length=1000) if documentos else pl.DataFrame()
+    
+    except Exception as e:
+        st.error(f"Erro ao buscar dados do MongoDB: {e}")
+        return pl.DataFrame()
+
+def pre_processar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Pré-processar e transformar DataFrame com operações relacionadas a datas.
+    """
+    df['Data Emissao'] = pd.to_datetime(df['Data Emissao'], errors='coerce', utc=True)
+    
+    df['mes_ano'] = df['Data Emissao'].dt.strftime('%Y-%m')
+    df['ano'] = df['Data Emissao'].dt.strftime('%Y')
+    
+    return df.sort_values(by=['Data Emissao'], ascending=[False])
+
+def criar_graficos_temporais(df: pd.DataFrame, agrupamento: str):
+    """
+    Criar gráficos temporais com diferentes métricas.
+    """
+    # Preparar métricas para visualização
+    metricas = [
+        ('Valor Total Nota Fiscal', 'Valor Total das Notas', 'total_valor', 'Blues'),
+        ('Total itens Nf', 'Total de Itens', 'total_itens', 'Greens')
     ]
 
-    # Executar o pipeline de agregação
-    documents = list(collection_xml_db.aggregate(join_pipeline))
+    graficos = []
+    for coluna, titulo, titulo_agregado, escala in metricas:
+        # Agrupar dados
+        df_agregado = df.groupby(agrupamento)[coluna].agg(['sum', 'count']).reset_index()
+        df_agregado.columns = [agrupamento, titulo_agregado, 'contagem']
+        
+        # Gráfico de barras
+        fig_bar = px.bar(
+            df_agregado, 
+            x=agrupamento, 
+            y=titulo_agregado,
+            title=f'{titulo} por {agrupamento}',
+            color=titulo_agregado,
+            color_continuous_scale=escala,
+            hover_data={'contagem': ':.0f'}
+        )
+        graficos.append(fig_bar)
 
-    # Converter ObjectId para strings
-    documents = convert_objectid_to_str(documents)
+    return graficos
 
-    # Se não houver documentos, retornar um DataFrame vazio
-    if not documents:
-        return pl.DataFrame()
+def criar_graficos_por_dimensao(df: pd.DataFrame, dimensao: str, agrupamento: str):
+    """
+    Criar gráficos agrupados por dimensão específica.
+    """
+    # Agregações por dimensão e período
+    df_agregado = df.groupby([dimensao, agrupamento])['Valor Total Nota Fiscal'].agg(['sum', 'count']).reset_index()
+    
+    # Top 10 da dimensão
+    top_10 = df_agregado.groupby(dimensao)['sum'].sum().nlargest(10).index
 
-    # Converter documentos em DataFrame Polars
-    try:
-        polars_df = pl.DataFrame(documents, infer_schema_length=1000)
-    except Exception as e:
-        st.error(f"Erro ao criar DataFrame Polars: {e}")
-        return pl.DataFrame()
+    # Filtrar apenas os top 10
+    df_top_10 = df_agregado[df_agregado[dimensao].isin(top_10)]
 
-    return polars_df
+    # Gráfico de linha para top dimensões
+    fig_linha = px.line(
+        df_top_10, 
+        x=agrupamento, 
+        y='sum', 
+        color=dimensao,
+        title=f'Top 10 {dimensao} - Valor Total por {agrupamento}'
+    )
 
-# Configuração do Streamlit
-st.set_page_config(
-    page_title="Dashboard MongoDB",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+    # Gráfico de barra empilhada
+    fig_barra_empilhada = px.bar(
+        df_top_10, 
+        x=agrupamento, 
+        y='sum', 
+        color=dimensao,
+        title=f'Top 10 {dimensao} - Distribuição por {agrupamento}'
+    )
 
-# CSS para personalização
-st.markdown("""
-    <style>
-    .main {overflow: auto;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stApp [data-testid="stToolbar"] {display: none;}
-    .stDeployButton {display: none;}
-    #stDecoration {display: none;}
-    [data-testid="collapsedControl"] {display: none;}
-    </style>
-""", unsafe_allow_html=True)
+    return [fig_linha, fig_barra_empilhada]
 
-# Título principal
-st.header("📊 Dashboard de Documentos MongoDB")
+def main():
+    st.set_page_config(page_title="Análise Temporal de Notas", page_icon="📊", layout="wide")
+    
+    st.markdown('## **📊 :rainbow[Painel de Análise Temporal de Notas Fiscais]**')
 
-# Configurações de conexão do MongoDB
-try:
-    # Usar secrets do Streamlit para credenciais
+    # Recuperar credenciais do MongoDB
     username = st.secrets["MONGO_USERNAME"]
     password = st.secrets["MONGO_PASSWORD"]
     cluster = st.secrets["MONGO_CLUSTER"]
     db_name = st.secrets["MONGO_DB"]
 
-    # Escapar credenciais
+    # Construir URI do MongoDB
     escaped_username = urllib.parse.quote_plus(username)
     escaped_password = urllib.parse.quote_plus(password)
+    URI_MONGO = f"mongodb+srv://{escaped_username}:{escaped_password}@{cluster}/{db_name}?retryWrites=true&w=majority"
 
-    # Montar string de conexão
-    MONGO_URI = f"mongodb+srv://{escaped_username}:{escaped_password}@{cluster}/{db_name}?retryWrites=true&w=majority"
-
-    # Coleções
-    collection_po = 'po'
-    collection_xml = 'xml'
-
-    # Carregamento dos dados
     with st.spinner("Carregando dados..."):
-        # Realizar join entre as collections
-        polars_join = mongo_collection_join(
-            MONGO_URI, 
-            db_name, 
-            collection_po, 
-            collection_xml
+        # Buscar todos os dados necessários
+        xml_chave_nfe = buscar_dados_mongo(
+            URI_MONGO, db_name, 'xml', 
+            'Chave NF-e', 
+            ["Data Emissao", "Valor Total Nota Fiscal", "Total itens Nf", 
+             "Nome Emitente", "Nota Fiscal", "Nome Material", 
+             "Projeto Envio", "Projeto", "Minha Categoria"]
         )
 
-        # Renderização dos dados
-        if not polars_join.is_empty():
-            # Título da seção de dados
-            st.subheader("Dados Combinados")
+        # Converter para pandas para processar
+        df_processado = xml_chave_nfe.to_pandas()
+        df_processado = pre_processar_dataframe(df_processado)
 
-            po_polars = polars_join.to_pandas()
-                        # Remove duplicates based on the slugified unique column
-            po_polars.drop_duplicates(subset=['po_Purchasing Document'], inplace=True)
+        if df_processado.empty:
+            st.error("Nenhum dado disponível")
+            return
 
-            # No bloco de renderização
-            st.dataframe(
-                po_polars, 
-                use_container_width=True,
-                hide_index=True,
-                height=600  # Altura ajustável
-            )
+    # Sidebar de Filtros
+    st.sidebar.header("🔍 Filtros Avançados")
+    
+    with st.sidebar:
+        # Opção de agrupamento temporal
+        tipo_agrupamento = st.radio(
+            "Agrupar por:", 
+            ["Ano", "Mês/Ano"], 
+            horizontal=True
+        )
 
-            # Informações detalhadas
-            st.write("Número total:", len(po_polars))
-            st.write("Número total:", len(po_polars))
-            st.write("Número total de colunas:", len(po_polars.columns))
-            st.write("Colunas:", list(po_polars.columns))
+        # Definir coluna de agrupamento baseado na seleção
+        coluna_agrupamento = 'ano' if tipo_agrupamento == "Ano" else 'mes_ano'
 
-        else:
-            st.warning("Nenhum documento encontrado.")
+        # Filtros Múltiplos
+        anos_disponiveis = sorted(df_processado['ano'].unique())
+        ano_selecionado = st.multiselect("Selecione Anos", anos_disponiveis, default=anos_disponiveis)
 
-except Exception as e:
-    st.error(f"Erro na conexão ou processamento: {e}")
+        categorias_disponiveis = df_processado['Minha Categoria'].unique()
+        categorias_selecionadas = st.multiselect("Selecione Categorias", categorias_disponiveis, default=categorias_disponiveis)
+
+        # Dimensões para análise
+        dimensoes_analise = [
+            'Nome Emitente', 'Nota Fiscal', 'Nome Material', 
+            'Projeto Envio', 'Projeto'
+        ]
+        dimensao_selecionada = st.selectbox("Selecione Dimensão para Análise", dimensoes_analise)
+
+    # Aplicar filtros
+    df_filtrado = df_processado[
+        (df_processado['ano'].isin(ano_selecionado)) &
+        (df_processado['Minha Categoria'].isin(categorias_selecionadas))
+    ]
+
+    # Métricas Principais
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total de Notas", len(df_filtrado))
+    with col2:
+        st.metric("Valor Total", f"R$ {df_filtrado['Valor Total Nota Fiscal'].sum():,.2f}")
+    with col3:
+        st.metric("Total de Itens", df_filtrado['Total itens Nf'].sum())
+    with col4:
+        st.metric("Categorias", len(categorias_selecionadas))
+
+    # Abas de Visualização
+    tab1, tab2, tab3 = st.tabs(["Visão Temporal", "Análise por Dimensão", "Dados Detalhados"])
+
+    with tab1:
+        # Gráficos temporais gerais
+        graficos_temporais = criar_graficos_temporais(df_filtrado, coluna_agrupamento)
+        for grafico in graficos_temporais:
+            st.plotly_chart(grafico, use_container_width=True)
+
+    with tab2:
+        # Gráficos por dimensão selecionada
+        graficos_dimensao = criar_graficos_por_dimensao(df_filtrado, dimensao_selecionada, coluna_agrupamento)
+        for grafico in graficos_dimensao:
+            st.plotly_chart(grafico, use_container_width=True)
+
+    with tab3:
+        # Tabela detalhada com filtros
+        st.dataframe(df_filtrado[[
+            'Data Emissao', 'Nota Fiscal', 'Nome Emitente', 
+            'Nome Material', 'Projeto Envio', 'Projeto', 
+            'Minha Categoria', 'Valor Total Nota Fiscal', 'Total itens Nf'
+        ]])
+
+if __name__ == "__main__":
+    main()
