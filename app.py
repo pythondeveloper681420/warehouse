@@ -16,6 +16,8 @@ import os
 import sendgrid
 from sendgrid.helpers.mail import Mail, Email, To, Content
 import os
+from numpy.typing import NDArray
+import numpy as np
 
 # Configuração da página
 st.set_page_config(
