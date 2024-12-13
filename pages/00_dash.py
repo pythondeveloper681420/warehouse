@@ -7,6 +7,7 @@ from pymongo import MongoClient
 import urllib.parse
 from bson.objectid import ObjectId
 
+#Minha Categoria
 def convert_objectid_to_str(documents):
     """Convert ObjectId fields to strings in MongoDB documents."""
     for document in documents:

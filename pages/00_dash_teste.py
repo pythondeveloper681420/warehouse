@@ -50,7 +50,7 @@ def buscar_dados_mongo(
     except Exception as e:
         st.error(f"Erro ao buscar dados do MongoDB: {e}")
         return pl.DataFrame()
-
+#CFOP Categoria
 def pre_processar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
     Pré-processar e transformar DataFrame com operações relacionadas a datas.
@@ -93,7 +93,7 @@ def main():
 
         xml_chave_nfe = buscar_dados_mongo(
             URI_MONGO, db_name, 'xml', 'Chave NF-e', 
-            ["CNPJ Emitente", "Data Emissao", "Valor Total Nota Fiscal", "Total itens Nf", "Minha Categoria"]
+            ["CNPJ Emitente", "Data Emissao", "Valor Total Nota Fiscal", "Total itens Nf", "CFOP Categoria"]
         )
 
         # Converter para pandas para mesclar e processar
@@ -158,7 +158,7 @@ def main():
             df_filtrado_final = df_filtrado[
                 (df_filtrado['ano'] >= ano_inicial) & 
                 (df_filtrado['ano'] <= ano_final) &
-                (df_filtrado['Minha Categoria'] == 'Venda de Terceiros - Venda de Produtos de Fornecedores')
+                (df_filtrado['CFOP Categoria'] == 'Venda de Terceiros - Venda de Produtos de Fornecedores')
             ]
 
             # Garantir que temos dados filtrados
