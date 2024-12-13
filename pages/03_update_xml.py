@@ -861,7 +861,7 @@ def main():
                         return "Transferência Entre Filiais - Envio AQA para Projeto"
                                 # Identificação das transferências entre filiais
 
-                elif aluguel_comodato_cfop:
+                elif cfop in aluguel_comodato_cfop:
                     if is_andritz_emitter:
                         return "Aluguel ou Comodato - Devolução"
                     else:
@@ -1061,15 +1061,32 @@ def main():
                     right_on="codigo_projeto", 
                     how="left"
                 )
+
+                                # Mapeamento dos meses em português
+                meses_pt = {
+                    1: 'janeiro', 2: 'fevereiro', 3: 'março', 4: 'abril', 5: 'maio', 6: 'junho',
+                    7: 'julho', 8: 'agosto', 9: 'setembro', 10: 'outubro', 11: 'novembro', 12: 'dezembro'
+                }
+
+                # Pré-processar e transformar DataFrame com operações relacionadas a datas
+                df_merged_projects['data nf'] = pd.to_datetime(df_merged_projects['dtEmi'], errors='coerce', utc=True)
+
+                # Criar novas colunas com base em dtEmi
+                df_merged_projects['mes_ano'] = df_merged_projects['data nf'].dt.strftime('%Y-%m')
+                df_merged_projects['ano'] = df_merged_projects['data nf'].dt.strftime('%Y')
+                df_merged_projects['mes'] = df_merged_projects['data nf'].dt.month.map(meses_pt)
+
+                # Criar a coluna 'data' com o formato desejado
+                df_merged_projects['data nf'] = df_merged_projects['data nf'].dt.strftime('%d/%m/%Y')
                 
                 # Exibir apenas as colunas renomeadas
-                colunas_visiveis = ['nNf','itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','total_itens_nf','dtEmi','dVenc','chNfe',
+                colunas_visiveis = ['nNf','itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','total_itens_nf','data nf','dVenc','chNfe',
                                     'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
                                     'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
                                     'cfop','categoria','my_categoria',
                                     'po','codigo_projeto_y','Project Code_x','Andritz WBS Element','Cost Center','total_invoices_per_po','total_itens_po','valor_recebido_po',
                                     'codigo_projeto','Project Code_y',
-                                    'unique']
+                                    'mes_ano','mes','ano','dtEmi','unique']
                 
                 df_merged_projects= df_merged_projects[colunas_visiveis]
                 
@@ -1085,7 +1102,7 @@ def main():
                     'vlTotProd': 'Valor Total Produto',
                     'vlTotalNf': 'Valor Total Nota Fiscal',
                     'total_itens_nf':'Total itens Nf',
-                    'dtEmi': 'Data Emissao',
+                    'data nf':'data nf',
                     'dVenc': 'Data Vencimento',
                     'chNfe': 'Chave NF-e',
                     'emitNome': 'Nome Emitente',
@@ -1121,7 +1138,10 @@ def main():
                     'valor_recebido_po': 'Valor Recebido PO',
                     'codigo_projeto': 'Codigo Projeto Envio',
                     'Project Code_y': 'Projeto Envio',
+                    'dtEmi': 'Data Emissao',
+                    'mes_ano':'mes_ano','ano':'ano','mes':'mes',
                     'unique': 'unique'
+
                 }
 
                 # Aplicar a renomeação
