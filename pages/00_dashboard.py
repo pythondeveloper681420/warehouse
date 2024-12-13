@@ -7,6 +7,8 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from typing import List, Dict, Any
 
+#CFOP Categoria
+
 def converter_objectid_para_str(documentos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Converter MongoDB ObjectId para string para serialização JSON."""
     for documento in documentos:
@@ -93,7 +95,7 @@ def main():
 
         xml_chave_nfe = buscar_dados_mongo(
             URI_MONGO, db_name, 'xml', 'Chave NF-e', 
-            ["CNPJ Emitente", "Data Emissao", "Valor Total Nota Fiscal", "Total itens Nf", "Minha Categoria"]
+            ["CNPJ Emitente", "Data Emissao", "Valor Total Nota Fiscal", "Total itens Nf", "CFOP Categoria"]
         )
 
         # Converter para pandas para mesclar e processar
@@ -154,12 +156,12 @@ def main():
                     horizontal=True
                 )
 
-            # Adicionar filtro para "Minha Categoria"
-            unique_categories = df_filtrado['Minha Categoria'].unique()
+            # Adicionar filtro para "CFOP Categoria"
+            unique_categories = df_filtrado['CFOP Categoria'].unique()
             unique_categories = sorted(unique_categories)
             unique_categories.insert(0, "All")
             selected_category = st.selectbox(
-                "Selecione Minha Categoria:",
+                "Selecione CFOP Categoria:",
                 options=unique_categories,
                 index=0,  # Default to "All"
                 key="selected_category"
@@ -175,7 +177,7 @@ def main():
                 df_filtrado_final = df_filtrado[
                     (df_filtrado['mes_ano'] >= mes_ano_inicial) & 
                     (df_filtrado['mes_ano'] <= mes_ano_final) &
-                    (df_filtrado['Minha Categoria'] == selected_category)
+                    (df_filtrado['CFOP Categoria'] == selected_category)
                 ]
 
             # Garantir que temos dados filtrados
@@ -284,12 +286,12 @@ def main():
             # Horizontal Bar Chart
     with st.container():
         st.subheader("Total Value by Category (Horizontal Bar Chart)")
-        # Aggregate data by 'Minha Categoria'
-        category_value = df_filtrado_final.groupby('Minha Categoria')['total_valor'].sum().reset_index()
+        # Aggregate data by 'CFOP Categoria'
+        category_value = df_filtrado_final.groupby('CFOP Categoria')['total_valor'].sum().reset_index()
         fig_bar_horizontal = px.bar(
             category_value,
             x='total_valor',
-            y='Minha Categoria',
+            y='CFOP Categoria',
             orientation='h',
             title='Total Value by Category',
             color='total_valor',
@@ -304,7 +306,7 @@ def main():
         fig_pie = px.pie(
             category_value,
             values='total_valor',
-            names='Minha Categoria',
+            names='CFOP Categoria',
             title='Distribution of Total Value by Category'
         )
         st.plotly_chart(fig_pie, use_container_width=True)
@@ -317,7 +319,7 @@ def main():
             df_filtrado_final,
             x='total_itens',
             y='total_valor',
-            color='Minha Categoria',
+            color='CFOP Categoria',
             title='Total Items vs. Total Value by Category',
             hover_data=['Nome Emitente']
         )
