@@ -816,6 +816,8 @@ def main():
                 industrializacao_cfops = ['1124', '1125', '1126', '2124', '2125', '2126', 
                                         '5124', '5125', '5126', '6124', '6125', '6126']
                 
+                aluguel_comodato_cfop = ['5908','5909','6909']
+                
                 industrializacao = ['5901']
                 
                 venda_cfops = ['5101', '5102', '5401', '5403', '5405', '5551', '5653', '5656', 
@@ -857,6 +859,13 @@ def main():
                         return "Transferência Entre Filiais - Envio AQA para Projeto"
                     else:
                         return "Transferência Entre Filiais - Envio AQA para Projeto"
+                                # Identificação das transferências entre filiais
+
+                elif aluguel_comodato_cfop:
+                    if is_andritz_emitter:
+                        return "Aluguel ou Comodato - Devolução"
+                    else:
+                        return "Aluguel ou Comodato - Recebimento"  
                 
                 elif cfop in transferencia_retorno_cfops:
                     if is_andritz_dest:
