@@ -183,6 +183,33 @@ def slugify(text):
     
     return text
 
+def tag(text):
+    """
+    Convert a text string into a slug format.
+    - Convert to lowercase
+    - Remove special characters
+    - Replace spaces with hyphens
+    - Remove consecutive hyphens
+    """
+    if not isinstance(text, str):
+        text = str(text)
+    
+    # Convert to lowercase and normalize unicode characters
+    text = text.lower()
+    text = unicodedata.normalize('NFKD', text)
+    text = text.encode('ascii', 'ignore').decode('utf-8')
+    
+    # Replace any non-alphanumeric character with a hyphen
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    
+    # Remove leading and trailing hyphens
+    text = text.strip(' ')
+    
+    # Replace multiple consecutive hyphens with a single hyphen
+    text = re.sub(r'-+', ' ', text)
+    
+    return text
+
 def clean_description(description):
     """Remove múltiplos espaços consecutivos e espaços no início e no final da string."""
     if description is None:
@@ -516,6 +543,9 @@ def main():
             
             # Remove duplicates based on the slugified unique column
             df.drop_duplicates(subset='unique', inplace=True)
+
+            df['tags'] = df['Descrição'].astype(str)
+            df['tags'] = df['tags'].apply(tag)
             
             # df=df_formatted
             def convert_to_decimal(df, columns, decimal_places=2):
@@ -675,7 +705,7 @@ def main():
                                     'Duplicata','Valor Original','Valor Pago',
                                     'Logradouro Emitente','Número Emitente','Complemento Emitente','Bairro Emitente','Município Emitente','UF Emitente','CEP Emitente','País Emitente',
                                     'Logradouro Destinatário','Número Destinatário','Complemento Destinatário','Bairro Destinatário','Município Destinatário','UF Destinatário','CEP Destinatário','País Destinatário',
-                                    'vlNf','po','unique']
+                                    'vlNf','po','tags','unique']
             
             # Renomear as colunas
 
@@ -685,13 +715,13 @@ def main():
                             'chaveNfe':'chNfe',
                             'Nome Emitente': 'emitNome','CNPJ Emitente':'emitCnpj','Logradouro Emitente':'emitLogr','Número Emitente':'emitNr','Complemento Emitente':'emitCompl','Bairro Emitente':'emitBairro','Município Emitente':'emitMunic','UF Emitente':'emitUf','CEP Emitente':'emitCep','País Emitente':'emitPais',
                             'Nome Destinatário': 'destNome','CNPJ Destinatário':'destCnpj','Logradouro Destinatário':'destLogr','Número Destinatário':'destNr','Complemento Destinatário':'destCompl','Bairro Destinatário':'destBairro','Município Destinatário':'destMunic','UF Destinatário':'destUf','CEP Destinatário':'destCep','País Destinatário':'destPais',
-                            'cfop':'cfop','unique':'unique'})
+                            'cfop':'cfop','tags':'tags','unique':'unique'})
 
             # Exibir apenas as colunas renomeadas
             colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
                                     'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
                                     'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                    'cfop','unique','codigo_projeto']
+                                    'cfop','tags','unique','codigo_projeto']
             
             df= df[colunas_renomeadas]
             
@@ -882,7 +912,7 @@ def main():
             colunas_renomeadas = ['nNf', 'dtEmi', 'itemNf','nomeMaterial','ncm','qtd','und','vlUnProd','vlTotProd','vlTotalNf','po','dVenc','chNfe',
                                     'emitNome','emitCnpj','emitLogr','emitNr','emitCompl','emitBairro','emitMunic','emitUf','emitCep','emitPais',
                                     'destNome','destCnpj','destLogr','destNr','destCompl','destBairro','destMunic','destUf','destCep','destPais',
-                                    'cfop','total_invoices_per_po', 'categoria','my_categoria','unique','codigo_projeto']
+                                    'cfop','total_invoices_per_po', 'categoria','my_categoria','tags','unique','codigo_projeto']
             
             df= df[colunas_renomeadas]
 
@@ -979,7 +1009,7 @@ def main():
                                     'cfop','my_categoria',
                                     'po','codigo_projeto_y','Project Code_x','Andritz WBS Element','Cost Center','total_invoices_per_po','total_itens_po','valor_recebido_po',
                                     'codigo_projeto','Project Code_y',
-                                    'mes_ano','mes','ano','dtEmi','unique']
+                                    'mes_ano','mes','ano','dtEmi','tags','unique']
                 
                 df_merged_projects= df_merged_projects[colunas_visiveis]
                 
@@ -1032,6 +1062,7 @@ def main():
                     'Project Code_y': 'Projeto Envio',
                     'dtEmi': 'Data Emissao',
                     'mes_ano':'mes_ano','ano':'ano','mes':'mes',
+                    'tags':'tags',
                     'unique': 'unique'
 
                 }
