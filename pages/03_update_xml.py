@@ -139,21 +139,21 @@ with st.spinner("Carregando dados..."):
     # Carregar o segundo DataFrame com valores únicos de "codigo_projeto"
     polars_cod_project = mongo_collection_to_polars_with_unique_codigo_projeto(MONGO_URI, db_name, collection_po)
 
-    # Mostrar o primeiro DataFrame
-    if not polars_po.is_empty():
-        st.write("DataFrame 1 (Com valores únicos de 'Purchasing Document'):")
-        st.text(len(polars_po))
-        st.write(polars_po)
-    else:
-        st.write("Nenhum documento encontrado para 'Purchasing Document'.")
+    # # Mostrar o primeiro DataFrame
+    # if not polars_po.is_empty():
+    #     st.write("DataFrame 1 (Com valores únicos de 'Purchasing Document'):")
+    #     st.text(len(polars_po))
+    #     st.write(polars_po)
+    # else:
+    #     st.write("Nenhum documento encontrado para 'Purchasing Document'.")
 
-    # Mostrar o segundo DataFrame
-    if not polars_cod_project.is_empty():
-        st.write("DataFrame 2 (Com valores únicos de 'codigo_projeto'):")
-        st.text(len(polars_cod_project))
-        st.write(polars_cod_project)
-    else:
-        st.write("Nenhum documento encontrado para 'codigo_projeto'.")
+    # # Mostrar o segundo DataFrame
+    # if not polars_cod_project.is_empty():
+    #     st.write("DataFrame 2 (Com valores únicos de 'codigo_projeto'):")
+    #     st.text(len(polars_cod_project))
+    #     st.write(polars_cod_project)
+    # else:
+    #     st.write("Nenhum documento encontrado para 'codigo_projeto'.")
 ###            
 
 def slugify(text):
@@ -816,20 +816,22 @@ def main():
                 industrializacao_cfops = ['1124', '1125', '1126', '2124', '2125', '2126', 
                                         '5124', '5125', '5126', '6124', '6125', '6126']
                 
+                industrializacao = ['5901']
+                
                 venda_cfops = ['5101', '5102', '5401', '5403', '5405', '5551', '5653', '5656', 
                             '6101', '6102', '6107', '6108', '6401', '6403', '6404', '5923', 
                             '6653', '6923']
                 
                 # Transferências detalhadas entre filiais
-                transferencia_envio_cfops = ['6949', '5554', '6554', '6555']  # Envio
+                transferencia_envio_cfops = ['6949', '5554', '6554', '6555', '5949','5551']  # Envio
                 transferencia_retorno_cfops = ['1949', '2554', '2908', '2949']  # Retorno
                 
                 # Lógica de categorização detalhada com mais clareza
                 if cfop in manutencao_cfops:
                     if is_andritz_emitter:
-                        return "Manutenção/Conserto/Reparo - Envio para Andritz"
+                        return "Manutenção/Conserto/Reparo - Envio para Fornecedor"
                     else:
-                        return "Retorno de Manutenção/Reparo - Devolução para Fornecedor"
+                        return "Retorno de Manutenção/Reparo - Devolução do Fornecedor"
                 
                 elif cfop in retorno_cfops:
                     return "Retorno de Mercadoria - Devolução de Produto ao Fornecedor"
@@ -840,24 +842,27 @@ def main():
                 elif cfop in industrializacao_cfops:
                     return "Industrialização - Processamento de Mercadorias para Produção"
                 
+                elif cfop in industrializacao:
+                    return "Industrialização - Envio materiais nossa propriedade para Industrialização"
+                
                 elif cfop in venda_cfops:
                     if is_andritz_emitter:
                         return "Venda Própria - Comercialização de Produtos Andritz"
                     else:
-                        return "Venda de Terceiros - Venda de Produtos de Fornecedores"
+                        return "Venda de Terceiros - Compra de Produtos de Fornecedores"
                 
                 # Identificação das transferências entre filiais
                 elif cfop in transferencia_envio_cfops:
                     if is_andritz_emitter:
-                        return "Transferência Entre Filiais - Envio de Produtos Andritz"
+                        return "Transferência Entre Filiais - Envio AQA para Projeto"
                     else:
-                        return "Transferência Entre Filiais - Envio para Recebimento"
+                        return "Transferência Entre Filiais - Envio AQA para Projeto"
                 
                 elif cfop in transferencia_retorno_cfops:
                     if is_andritz_dest:
-                        return "Transferência Entre Filiais - Retorno de Produtos Andritz"
+                        return "Transferência Entre Filiais - Retorno Projeto para AQA"
                     else:
-                        return "Transferência Entre Filiais - Retorno para Recebimento"
+                        return "Transferência Entre Filiais - Retorno Projeto para AQA"
                 
                 return "Outros - Categoria Padrão para CFOPs Não Identificados"
 
