@@ -158,7 +158,7 @@ def main():
             df_filtrado_final = df_filtrado[
                 (df_filtrado['ano'] >= ano_inicial) & 
                 (df_filtrado['ano'] <= ano_final) &
-                (df_filtrado['CFOP Categoria'] == 'Venda de Terceiros - Venda de Produtos de Fornecedores')
+                (df_filtrado['CFOP Categoria'] == 'Venda de Terceiros - Compra de Produtos de Fornecedores')
             ]
 
             # Garantir que temos dados filtrados
