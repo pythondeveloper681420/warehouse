@@ -74,6 +74,14 @@ def calcular_similaridade_tags(df_xml: pd.DataFrame, df_cat: pd.DataFrame) -> pd
     Returns:
         pd.DataFrame: DataFrame com dados preenchidos
     """
+    # Verificar se as colunas existem, se não existirem, criar colunas vazias
+    colunas_necessarias = ['grupo', 'subgrupo']
+    for coluna in colunas_necessarias:
+        if coluna not in df_xml.columns:
+            df_xml[coluna] = pd.NA
+        if coluna not in df_cat.columns:
+            df_cat[coluna] = pd.NA
+
     # Pré-processar tags
     df_xml['tags_processadas'] = df_xml['tags'].fillna('').str.lower()
     df_cat['tags_processadas'] = df_cat['tags'].fillna('').str.lower()
@@ -94,15 +102,16 @@ def calcular_similaridade_tags(df_xml: pd.DataFrame, df_cat: pd.DataFrame) -> pd
         similaridades = df_cat['palavras_tags'].apply(lambda x: len(set(x).intersection(tags_linha)))
         
         # Encontrar a melhor correspondência
-        idx_melhor_correspondencia = similaridades.idxmax()
-        melhor_correspondencia = df_cat.loc[idx_melhor_correspondencia]
-        
-        # Atualizar valores ausentes
-        if pd.isna(df_mesclado.loc[idx, 'grupo']) and not pd.isna(melhor_correspondencia['grupo']):
-            df_mesclado.loc[idx, 'grupo'] = melhor_correspondencia['grupo']
-        
-        if pd.isna(df_mesclado.loc[idx, 'subgrupo']) and not pd.isna(melhor_correspondencia['subgrupo']):
-            df_mesclado.loc[idx, 'subgrupo'] = melhor_correspondencia['subgrupo']
+        if not similaridades.empty:
+            idx_melhor_correspondencia = similaridades.idxmax()
+            melhor_correspondencia = df_cat.loc[idx_melhor_correspondencia]
+            
+            # Atualizar valores ausentes
+            if pd.isna(df_mesclado.loc[idx, 'grupo']) and not pd.isna(melhor_correspondencia['grupo']):
+                df_mesclado.loc[idx, 'grupo'] = melhor_correspondencia['grupo']
+            
+            if pd.isna(df_mesclado.loc[idx, 'subgrupo']) and not pd.isna(melhor_correspondencia['subgrupo']):
+                df_mesclado.loc[idx, 'subgrupo'] = melhor_correspondencia['subgrupo']
     
     # Limpar colunas temporárias
     df_mesclado.drop(columns=['tags_processadas', 'palavras_tags'], inplace=True)
@@ -125,14 +134,14 @@ def main():
     preenchendo automaticamente informações ausentes usando similaridade de tags.
     """)
 
-    # Colunas selecionadas
+    # Colunas selecionadas - make this more flexible
     colunas_selecionadas = [
         "Nome Material",
-        "tags",
-        "grupo",
-        "subgrupo",
-        "unique"
+        "tags"
     ]
+    
+    # Optional columns to add if they exist
+    colunas_opcionais = ["grupo", "subgrupo", "unique"]
 
     # Parâmetros de conexão do MongoDB
     try:
@@ -156,10 +165,10 @@ def main():
         with st.spinner("Carregando dados do MongoDB..."):
             # Carregar coleções
             polars_cat = carregar_colecao_mongodb(
-                URI_MONGODB, nome_bd, 'category', colunas_selecionadas
+                URI_MONGODB, nome_bd, 'category', colunas_selecionadas + colunas_opcionais
             )
             polars_xml = carregar_colecao_mongodb(
-                URI_MONGODB, nome_bd, 'xml', colunas_selecionadas
+                URI_MONGODB, nome_bd, 'xml', colunas_selecionadas + colunas_opcionais
             )
 
             # Converter para Pandas
@@ -180,13 +189,22 @@ def main():
                 suffixes=('_xml', '_cat')
             )
 
+            # Adicionar colunas em falta com valores NA se não existirem
+            for coluna in ['grupo', 'subgrupo', 'unique']:
+                if coluna not in df_mesclado.columns:
+                    df_mesclado[coluna] = pd.NA
+
             # Preencher dados ausentes
             df_mesclado = calcular_similaridade_tags(df_mesclado, pandas_cat)
 
             # Remover duplicatas
-            df_mesclado.drop_duplicates(subset='unique', inplace=True)
+            if 'unique' in df_mesclado.columns:
+                df_mesclado.drop_duplicates(subset='unique', inplace=True)
             df_mesclado.drop_duplicates(subset='tags', inplace=True)
-            df_mesclado.drop(columns='unique', errors='ignore', inplace=True)
+            
+            # Remover coluna 'unique' se existir
+            if 'unique' in df_mesclado.columns:
+                df_mesclado.drop(columns='unique', errors='ignore', inplace=True)
 
             # Exibir resultados
             st.success(f"✅ Dados processados com sucesso! Total de registros: {len(df_mesclado)}")

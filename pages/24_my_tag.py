@@ -107,6 +107,7 @@ selected_col = [
     "tags",
     "grupo",
     "subgrupo",
+    "url_imagens"
     # Add other columns as needed
 ]
 @st.cache_data
