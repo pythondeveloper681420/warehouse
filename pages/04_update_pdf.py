@@ -9,145 +9,208 @@ from io import BytesIO
 import tempfile
 import unicodedata
 
-# Set page config
-st.set_page_config(
-    page_title="NF-e Extractor",
-    page_icon="📄",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Field mapping dictionary to handle different variations
+FIELD_MAPPINGS = {
+    "numero_nf": [
+        r"NFS-e\s*:?\s*([\d]+)",
+        r"Número da\s*NFS-e\s*:?\s*([\d]+)",
+        r"Nº da Nota\s*:?\s*([\d]+)",
+        r"Número\s*:?\s*([\d]+)"
+    ],
+    "data_emissao": [
+        r"Data e Hora da Emissão\s*:?\s*([\d]{1,2}/[\d]{1,2}/[\d]{4}\s+\d{1,2}:\d{2})",
+        r"Emissão da NFS-e\s*:?\s*([\d]{1,2}/[\d]{1,2}/[\d]{4}\s+\d{1,2}:\d{2})",
+        r"Data de Emissão\s*:?\s*([\d]{1,2}/[\d]{1,2}/[\d]{4}\s+\d{1,2}:\d{2})"
+    ],
+    "competencia": [
+        r"Competência\s*:?\s*([^\n]+)",
+        r"Mês de Competência\s*:?\s*([^\n]+)",
+        r"Período de Competência\s*:?\s*([^\n]+)"
+    ],
+    "codigo_verificacao": [
+        r"Código de Verificação\s*:?\s*([^\n]+)",
+        r"Código Verificador\s*:?\s*([^\n]+)",
+        r"Código de Autenticidade\s*:?\s*([^\n]+)"
+    ],
+    "numero_rps": [
+        r"Número do RPS\s*:?\s*([\d]+)",
+        r"RPS Nº\s*:?\s*([\d]+)"
+    ],
+    "nf_substituida": [
+        r"No\. da NFS-e substituída\s*:?\s*([\d]+)",
+        r"NFS-e substituída\s*:?\s*([\d]+)"
+    ],
+    "prestador_nome": [
+        r"Razão Social/Nome\s*:?\s*([^\n]+)",
+        r"Nome/Razão Social\s*:?\s*([^\n]+)",
+        r"Prestador de Serviço\s*:?\s*([^\n]+)"
+    ],
+    "prestador_cnpj": [
+        r"CNPJ/CPF\s*:?\s*([\d\.\-/]+)",
+        r"CPF/CNPJ\s*:?\s*([\d\.\-/]+)",
+        r"CNPJ\s*:?\s*([\d\.\-/]+)"
+    ],
+    "prestador_telefone": [
+        r"Telefone\s*:?\s*([\d\(\)\s\-]+)",
+        r"Fone\s*:?\s*([\d\(\)\s\-]+)",
+        r"Tel\s*:?\s*([\d\(\)\s\-]+)"
+    ],
+    "prestador_email": [
+        r"e-mail\s*:?\s*([\w\.\-]+@[\w\.\-]+)",
+        r"E-mail\s*:?\s*([\w\.\-]+@[\w\.\-]+)",
+        r"Email\s*:?\s*([\w\.\-]+@[\w\.\-]+)"
+    ],
+    "tomador_nome": [
+        r"Tomador de Serviço\s*Razão Social/Nome\s*:?\s*([^\n]+)",
+        r"Nome/Razão Social do Tomador\s*:?\s*([^\n]+)",
+        r"Tomador\s*:?\s*([^\n]+)"
+    ],
+    "tomador_cnpj": [
+        r"CNPJ/CPF do Tomador\s*:?\s*([\d\.\-/]+)",
+        r"CPF/CNPJ do Tomador\s*:?\s*([\d\.\-/]+)",
+        r"CNPJ Tomador\s*:?\s*([\d\.\-/]+)"
+    ],
+    "tomador_endereco": [
+        r"Endereço e CEP\s*:?\s*([^\n]+)",
+        r"Endereço Tomador\s*:?\s*([^\n]+)"
+    ],
+    "tomador_telefone": [
+        r"Telefone Tomador\s*:?\s*([\d\(\)\s\-]+)",
+        r"Fone Tomador\s*:?\s*([\d\(\)\s\-]+)"
+    ],
+    "tomador_email": [
+        r"e-mail Tomador\s*:?\s*([\w\.\-]+@[\w\.\-]+)",
+        r"Email Tomador\s*:?\s*([\w\.\-]+@[\w\.\-]+)"
+    ],
+    "discriminacao_servico": [
+        r"Discriminação (do|dos) Serviço(s)?\s*(.+?)(?=Código do Serviço|Detalhamento Específico|Tributos Federais|Valor do Serviço)",
+        r"Descrição dos Serviços\s*(.+?)(?=Código|Valor|Tributos)",
+        r"Descrição\s*(.+?)(?=Código|Valor|Tributos)"
+    ],
+    "codigo_servico": [
+        r"Código do Serviço\s*/\s*Atividade\s*([^\n]+)",
+        r"Código Serviço\s*:?\s*([^\n]+)"
+    ],
+    "detalhamento_especifico": [
+        r"Detalhamento Específico da Construção Civil\s*([^\n]+)",
+        r"Detalhamento Específico\s*:?\s*([^\n]+)"
+    ],
+    "codigo_obra": [
+        r"Código da Obra\s*([^\n]+)",
+        r"Código Obra\s*:?\s*([^\n]+)"
+    ],
+    "codigo_art": [
+        r"Código ART\s*([^\n]+)",
+        r"ART\s*:?\s*([^\n]+)"
+    ],
+    "tributos_federais": [
+        r"Tributos Federais\s*([^\n]+)",
+        r"Tributos Fed\.\s*:?\s*([^\n]+)"
+    ],
+    "valor_servico": [
+        r"Valor (do|dos) Serviço(s)?\s*R\$\s*([\d\.,]+)",
+        r"Valor Total\s*R\$\s*([\d\.,]+)",
+        r"Total da Nota\s*R\$\s*([\d\.,]+)"
+    ],
+    "desconto_incondicionado": [
+        r"Desconto Incondicionado\s*R\$\s*([\d\.,]+)",
+        r"Desc\. Incond\.\s*R\$\s*([\d\.,]+)"
+    ],
+    "desconto_condicionado": [
+        r"Desconto Condicionado\s*R\$\s*([\d\.,]+)",
+        r"Desc\. Cond\.\s*R\$\s*([\d\.,]+)"
+    ],
+    "retencao_federal": [
+        r"Retenções Federais\s*R\$\s*([\d\.,]+)",
+        r"Ret\. Federais\s*R\$\s*([\d\.,]+)"
+    ],
+    "issqn_retido": [
+        r"ISSQN Retido\s*R\$\s*([\d\.,]+)",
+        r"ISS Retido\s*R\$\s*([\d\.,]+)"
+    ],
+    "valor_liquido": [
+        r"Valor Líquido\s*R\$\s*([\d\.,]+)",
+        r"Líquido\s*R\$\s*([\d\.,]+)"
+    ],
+    "regime_tributacao": [
+        r"Regime Especial Tributação\s*([^\n]+)",
+        r"Regime Tributário\s*:?\s*([^\n]+)"
+    ],
+    "simples_nacional": [
+        r"Opção Simples Nacional\s*([^\n]+)",
+        r"Simples Nacional\s*:?\s*([^\n]+)"
+    ],
+    "incentivador_cultural": [
+        r"Incentivador Cultural\s*([^\n]+)",
+        r"Inc\. Cultural\s*:?\s*([^\n]+)"
+    ],
+    "avisos": [
+        r"Avisos\s*([^\n]+)",
+        r"Observações\s*:?\s*([^\n]+)"
+    ]
+}
 
-# Custom CSS
-st.markdown("""
-    <style>
-    .main {
-        padding: 1rem;
-    }
-    .stButton>button {
-        width: 100%;
-        border-radius: 5px;
-        height: 3rem;
-        font-weight: bold;
-    }
-    .uploadedFile {
-        border: 1px solid #e6e6e6;
-        border-radius: 5px;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-    .success-message {
-        padding: 1rem;
-        background-color: #d4edda;
-        color: #155724;
-        border-radius: 5px;
-        margin: 1rem 0;
-    }
-    .title-container {
-        text-align: center;
-        padding: 2rem 0;
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        margin-bottom: 2rem;
-    }
-    </style>
-""", unsafe_allow_html=True)
+def extract_field(text, field_key):
+    """Extract field value using multiple possible patterns"""
+    if not text:
+        return None
+    patterns = FIELD_MAPPINGS.get(field_key, [])
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            return match.group(match.lastindex).strip()
+    return None
+
+def extract_numbers(text):
+    """Extract numbers starting with 4501-4506"""
+    if not text or not isinstance(text, str):
+        return ""
+    pattern = r'(450[1-6]\d{6,})'
+    matches = re.findall(pattern, text)
+    processed_numbers = [number[:10] for number in matches]
+    unique_numbers = list(dict.fromkeys(processed_numbers))
+    return ' '.join(unique_numbers[:10]) if unique_numbers else ""
+
+def extract_code(text):
+    """Extract 6 digits from X-XX-XXXXXX-XXX-XXXX-XXX pattern"""
+    if not text or not isinstance(text, str):
+        return ""
+    pattern = r'[A-Z0-9]-[A-Z0-9]{2}-(\d{6})-\d{3}-\d{4}-\d{3}'
+    match = re.search(pattern, text)
+    return match.group(1) if match else ""
 
 def slugify(text):
-    """
-    Convert a text string into a slug format.
-    - Convert to lowercase
-    - Remove special characters
-    - Replace spaces with hyphens
-    - Remove consecutive hyphens
-    """
+    """Convert text to slug format"""
     if not isinstance(text, str):
         text = str(text)
-    
-    # Convert to lowercase and normalize unicode characters
     text = text.lower()
     text = unicodedata.normalize('NFKD', text)
     text = text.encode('ascii', 'ignore').decode('utf-8')
-    
-    # Replace any non-alphanumeric character with a hyphen
     text = re.sub(r'[^a-z0-9]+', '-', text)
-    
-    # Remove leading and trailing hyphens
     text = text.strip('-')
-    
-    # Replace multiple consecutive hyphens with a single hyphen
     text = re.sub(r'-+', '-', text)
-    
     return text
 
 def convert_brazilian_number(value):
-    """Convert Brazilian number format (1.234,56) to float."""
+    """Convert Brazilian number format to float"""
     if pd.isna(value) or value is None:
         return 0.0
     try:
-        # Remove all dots and replace comma with dot
-        clean_value = value.replace('.', '').replace(',', '.')
+        clean_value = str(value).replace('.', '').replace(',', '.')
         return float(clean_value)
     except (ValueError, AttributeError):
         return 0.0
-    
-def extract_numbers(text):
-   """
-   Extrai números que começam com 4501-4506, retornando apenas 6 dígitos após o prefixo.
-   
-   Parameters:
-   text (str): O texto onde procurar os números
-   
-   Returns:
-   str: String com os números encontrados separados por espaço
-   """
-   import re
-   
-   if not text or not isinstance(text, str):
-       return ""
-   
-   # Primeiro encontra números começando com 450[1-6] e qualquer quantidade de dígitos após
-   pattern = r'(450[1-6]\d{6,})'
-   matches = re.findall(pattern, text)
-   
-   # Processa cada match para garantir apenas 6 dígitos após o prefixo
-   processed_numbers = []
-   for number in matches:
-       # Pega apenas os primeiros 10 dígitos (4 do prefixo + 6 dígitos)
-       truncated = number[:10]
-       processed_numbers.append(truncated)
-   
-   # Remove duplicatas mantendo a ordem
-   unique_numbers = list(dict.fromkeys(processed_numbers))
-   
-   # Retorna os primeiros 10 números encontrados
-   return ' '.join(unique_numbers[:10]) if unique_numbers else ""
 
-def extract_code(text):
-   """
-   Extrai apenas os 6 dígitos do padrão X-XX-XXXXXX-XXX-XXXX-XXX, onde X pode ser letra ou número.
-   
-   Parameters:
-   text (str): O texto onde procurar os códigos
-   
-   Returns:
-   str: String apenas com os 6 dígitos ou vazio se não encontrar
-   """
-   import re
-   
-   if not text or not isinstance(text, str):
-       return ""
-   
-   # Padrão para capturar 6 dígitos após qualquer letra/número e traço
-   pattern = r'[A-Z0-9]-[A-Z0-9]{2}-(\d{6})-\d{3}-\d{4}-\d{3}'
-   
-   # Encontra o match no texto
-   match = re.search(pattern, text)
-   
-   # Retorna apenas os 6 dígitos se encontrar
-   return match.group(1) if match else ""
+def to_excel(df):
+    """Convert dataframe to excel file and encode it for download"""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    excel_data = output.getvalue()
+    return base64.b64encode(excel_data).decode('utf-8')
 
 def extrair_dados_nf(pdf_file):
-    """Extrai dados importantes da Nota Fiscal do PDF."""
+    """Extract data from NF PDF"""
     dados_nf = {
         "Numero NFS-e": None,
         "Data Emissão": None,
@@ -189,203 +252,100 @@ def extrair_dados_nf(pdf_file):
 
     try:
         with pdfplumber.open(tmp_file_path) as pdf:
+            text = ""
             for page in pdf.pages:
-                text = page.extract_text()
-                
-                if not text:
-                    st.warning(f"Falha ao extrair texto do PDF: {pdf_file.name}")
-                    continue
+                text += page.extract_text() or ""
+            
+            if not text:
+                st.warning(f"Falha ao extrair texto do PDF: {pdf_file.name}")
+                return dados_nf
 
-                # Numero NFS-e
-                match = re.search(r"NFS-e\s*:?\s*([\d]+)", text)
-                if match:
-                    dados_nf["Numero NFS-e"] = match.group(1).strip()
-                
-                # Data Emissão
-                match = re.search(r"Data e Hora da Emissão\s*:?\s*([\d]{1,2}/[\d]{1,2}/[\d]{4}\s+\d{1,2}:\d{2})", text)
-                if match:
-                    dados_nf["Data Emissão"] = match.group(1).strip()
+            # Extract all fields using mapping
+            dados_nf["Numero NFS-e"] = extract_field(text, "numero_nf")
+            dados_nf["Data Emissão"] = extract_field(text, "data_emissao")
+            dados_nf["Competencia"] = extract_field(text, "competencia")
+            dados_nf["Codigo de Verificacao"] = extract_field(text, "codigo_verificacao")
+            dados_nf["Numero RPS"] = extract_field(text, "numero_rps")
+            dados_nf["NF-e Substituida"] = extract_field(text, "nf_substituida")
+            dados_nf["Razao Social Prestador"] = extract_field(text, "prestador_nome")
+            dados_nf["CNPJ Prestador"] = extract_field(text, "prestador_cnpj")
+            dados_nf["Telefone Prestador"] = extract_field(text, "prestador_telefone")
+            dados_nf["Email Prestador"] = extract_field(text, "prestador_email")
+            dados_nf["Razao Social Tomador"] = extract_field(text, "tomador_nome")
+            dados_nf["CNPJ Tomador"] = extract_field(text, "tomador_cnpj")
+            dados_nf["Endereco Tomador"] = extract_field(text, "tomador_endereco")
+            dados_nf["Telefone Tomador"] = extract_field(text, "tomador_telefone")
+            dados_nf["Email Tomador"] = extract_field(text, "tomador_email")
+            dados_nf["Discriminacao do Servico"] = extract_field(text, "discriminacao_servico")
+            dados_nf["Codigo Servico"] = extract_field(text, "codigo_servico")
+            dados_nf["Detalhamento Especifico"] = extract_field(text, "detalhamento_especifico")
+            dados_nf["Codigo da Obra"] = extract_field(text, "codigo_obra")
+            dados_nf["Codigo ART"] = extract_field(text, "codigo_art")
+            dados_nf["Tributos Federais"] = extract_field(text, "tributos_federais")
+            dados_nf["Valor do Servico"] = extract_field(text, "valor_servico")
+            dados_nf["Desconto Incondicionado"] = extract_field(text, "desconto_incondicionado")
+            dados_nf["Desconto Condicionado"] = extract_field(text, "desconto_condicionado")
+            dados_nf["Retencao Federal"] = extract_field(text, "retencao_federal")
+            dados_nf["ISSQN Retido"] = extract_field(text, "issqn_retido")
+            dados_nf["Valor Liquido"] = extract_field(text, "valor_liquido")
+            dados_nf["Regime Especial Tributacao"] = extract_field(text, "regime_tributacao")
+            dados_nf["Simples Nacional"] = extract_field(text, "simples_nacional")
+            dados_nf["Incentivador Cultural"] = extract_field(text, "incentivador_cultural")
+            dados_nf["Avisos"] = extract_field(text, "avisos")
 
-                # Captura a Competência
-                match = re.search(r"Competência\s*:?\s*(.+)", text)
-                if match:
-                    dados_nf["Competencia"] = match.group(1).strip()
-                    
-                # Código de Verificação
-                match = re.search(r"Código de Verificação\s*:?\s*(.+)", text)
-                if match:  
-                    dados_nf["Codigo de Verificacao"] = match.group(1).strip()
-
-                # Captura o Número do RPS
-                match = re.search(r"Número do RPS\s*:?\s*([\d]+)", text)
-                if match:
-                    dados_nf["Numero RPS"] = match.group(1).strip()
-
-                # Captura a NFS-e Substituída
-                match = re.search(r"No. da NFS-e substituída\s*:?\s*([\d]+)", text)
-                if match:
-                    dados_nf["NF-e Substituida"] = match.group(1).strip()
-                
-                # Captura a Razão Social
-                if match:
-                    dados_nf["Razao Social Tomador"] = match.group(1).strip()
-                match = re.search(r"Razão Social/Nome\s*:?\s*(.+)", text)
-                
-                # Captura o CNPJ do Prestador  
-                if match:
-                    dados_nf["Razao Social Prestador"] = match.group(1).strip()
-                match = re.search(r"CNPJ/CPF\s*:?\s*([\d\.\-/]+)", text)
-                if match:
-                    dados_nf["CNPJ Prestador"] = match.group(1).strip()
-
-                # Telefone do Prestador
-                match = re.search(r"Telefone\s*:?\s*([\d\(\)\s\-]+)", text)
-                if match:
-                    dados_nf["Telefone Prestador"] = match.group(1).strip()
-                    
-                # E-mail do Prestador
-                match = re.search(r"e-mail\s*:?\s*([\w\.\-]+@[\w\.\-]+)", text)
-                if match:
-                    dados_nf["Email Prestador"] = match.group(1).strip()
-
-                # Razão Social do Tomador
-                match = re.search(r"Tomador de Serviço\s*Razão Social/Nome\s*:?\s*(.+)", text)
-                if match:
-                    dados_nf["Razao Social Tomador"] = match.group(1).strip()
-                    
-                # CNPJ do Tomador   
-                match = re.search(r"CNPJ/CPF\s*:?\s*([\d\.\-/]+)", text)
-                if match:
-                    dados_nf["CNPJ Tomador"] = match.group(1).strip()
-
-                # Endereço do Tomador
-                match = re.search(r"Endereço e CEP\s*:?\s*(.+)", text)
-                if match:
-                    dados_nf["Endereco Tomador"] = match.group(1).strip()
-
-                # Telefone do Tomador
-                match = re.search(r"Telefone\s*:?\s*([\d\(\)\s\-]+)", text)
-                if match:
-                    dados_nf["Telefone Tomador"] = match.group(1).strip()
-                    
-                # E-mail do Tomador    
-                match = re.search(r"e-mail\s*:?\s*([\w\.\-]+@[\w\.\-]+)", text)
-                if match:
-                    dados_nf["Email Tomador"] = match.group(1).strip()
-
-                # Captura a Discriminação do Serviço ou Discriminação dos Serviços
-                match = re.search(r"Discriminação (do|dos) Serviço(s)?\s*(.+?)(?=Código do Serviço|Detalhamento Específico|Tributos Federais|Valor do Serviço)", text, re.DOTALL)
-                if match:
-                    dados_nf["Discriminacao do Servico"] = match.group(3).strip()
-
-                # Captura o Código do Serviço
-                match = re.search(r"Código do Serviço\s*/\s*Atividade\s*(.+)", text)
-                if match:
-                    dados_nf["Codigo Servico"] = match.group(1).strip()
-
-                # Detalhamento Específico da Construção Civil
-                match = re.search(r"Detalhamento Específico da Construção Civil\s*(.+)", text)
-                if match:
-                    dados_nf["Detalhamento Especifico"] = match.group(1).strip()
-
-                # Código da Obra
-                match = re.search(r"Código da Obra\s*(.+)", text)
-                if match:
-                    dados_nf["Codigo da Obra"] = match.group(1).strip()
-
-                # Código ART
-                match = re.search(r"Código ART\s*(.+)", text)
-                if match:
-                    dados_nf["Codigo ART"] = match.group(1).strip()
-
-                # Tributos Federais
-                match = re.search(r"Tributos Federais\s*(.+)", text)
-                if match:
-                    dados_nf["Tributos Federais"] = match.group(1).strip()
-
-                # Valor do Serviço
-                match = re.search(r"Valor (do|dos) Serviço(s)?\s*R\$\s*([\d,\.]+)", text)
-                if match:
-                    dados_nf["Valor do Servico"] = match.group(3).strip()  # Grupo correto
-                else:
-                    dados_nf["Valor do Servico"] = None  # Se não encontrou, define como None
-
-                # Descontos Incondicionados e Condicionados
-                match = re.search(r"Desconto Incondicionado\s*R\$\s*([\d,\.]+)", text)
-                if match:
-                    dados_nf["Desconto Incondicionado"] = match.group(1).strip()
-                else:
-                    dados_nf["Desconto Incondicionado"] = None
-                match = re.search(r"Desconto Condicionado\s*R\$\s*([\d,\.]+)", text)
-                if match:
-                    dados_nf["Desconto Condicionado"] = match.group(1).strip()
-                else:
-                    dados_nf["Desconto Condicionado"] = None
-
-                # Retenção Federal
-                match = re.search(r"Retenções Federais\s*R\$\s*([\d,\.]+)", text)
-                if match:
-                    dados_nf["Retencao Federal"] = match.group(1).strip()
-                else:
-                    dados_nf["Retencao Federal"] = None
-
-                # ISSQN Retido
-                match = re.search(r"ISSQN Retido\s*R\$\s*([\d,\.]+)", text)
-                if match:
-                    dados_nf["ISSQN Retido"] = match.group(1).strip()
-                else:
-                    dados_nf["ISSQN Retido"] = None
-
-                # Valor Líquido
-                match = re.search(r"Valor Líquido\s*R\$\s*([\d,\.]+)", text)
-                if match:
-                    dados_nf["Valor Liquido"] = match.group(1).strip()
-                else:
-                    dados_nf["Valor Liquido"] = None
-
-                # Regime Especial de Tributação
-                match = re.search(r"Regime Especial Tributação\s*(.+)", text)
-                if match:
-                    dados_nf["Regime Especial Tributacao"] = match.group(1).strip()
-
-                # Simples Nacional
-                match = re.search(r"Opção Simples Nacional\s*(.+)", text)
-                if match:
-                    dados_nf["Simples Nacional"] = match.group(1).strip()
-
-                # Incentivador Cultural
-                match = re.search(r"Incentivador Cultural\s*(.+)", text)
-                if match:
-                    dados_nf["Incentivador Cultural"] = match.group(1).strip()
-
-                # Avisos
-                match = re.search(r"Avisos\s*(.+)", text)
-                if match:
-                    dados_nf["Avisos"] = match.group(1).strip()
-                               
     finally:
         os.unlink(tmp_file_path)
 
     return dados_nf
 
-def to_excel(df):
-    """Convert dataframe to excel file and encode it for download"""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
-    excel_data = output.getvalue()
-    b64 = base64.b64encode(excel_data).decode('utf-8')
-    return b64
-#dados_extraidos
-
 def main():
-    st.header(" 📝 Extrator de Notas Fiscais de serviço")
+    st.set_page_config(
+        page_title="NF-e Extractor",
+        page_icon="📄",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
 
-    # Main content
-    tabs = st.tabs(["📤 Upload e Extração", " 📊 Visualização dos Dados" ,"❓Como Utilizar"])
+    # Custom CSS
+    st.markdown("""
+        <style>
+        .main {
+            padding: 1rem;
+        }
+        .stButton>button {
+            width: 100%;
+            border-radius: 5px;
+            height: 3rem;
+            font-weight: bold;
+        }
+        .uploadedFile {
+            border: 1px solid #e6e6e6;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        .success-message {
+            padding: 1rem;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+        .title-container {
+            text-align: center;
+            padding: 2rem 0;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.header("📝 Extrator de Notas Fiscais de Serviço")
+    
+    tabs = st.tabs(["📤 Upload e Extração", "📊 Visualização dos Dados", "❓Como Utilizar"])
     
     with tabs[0]:
-        # [Previous upload tab code remains the same]
         col1, col2 = st.columns([2, 1])
         
         with col1:
@@ -399,24 +359,21 @@ def main():
             with st.spinner('Processando os arquivos...'):
                 dados_extraidos = []
                 progress_bar = st.progress(0)
+                
                 for i, pdf_file in enumerate(uploaded_files):
                     dados_nf = extrair_dados_nf(pdf_file)
                     dados_extraidos.append(dados_nf)
                     progress_bar.progress((i + 1) / len(uploaded_files))
-                     
+                
                 df_nf = pd.DataFrame(dados_extraidos)
                 
-                # Create unique identifier using slugify
+                # Create unique identifier and remove duplicates
                 df_nf['unique'] = df_nf['Numero NFS-e'].astype(str) + '-' + df_nf['CNPJ Prestador'].astype(str)
                 df_nf['unique'] = df_nf['unique'].apply(slugify)
+                df_nf.drop_duplicates(subset='unique', inplace=True)
                 
-                # Remove duplicates based on the slugified unique column
-                df_nf.drop_duplicates(subset='unique', inplace=True)   
-                
-                df_nf['po'] = df_nf['Discriminacao do Servico'].fillna('').apply(extract_numbers).str[:10]  
-                df_nf['po'] = df_nf['po'].apply(lambda x: x if len(x) == 10 else '')             
-                df_nf['po'] = df_nf['po'].fillna('').apply(extract_numbers)
-                
+                # Extract PO numbers and project codes
+                df_nf['po'] = df_nf['Discriminacao do Servico'].fillna('').apply(extract_numbers)
                 df_nf['codigo_projeto'] = df_nf['Discriminacao do Servico'].apply(extract_code)
                 
                 # Process data
@@ -424,7 +381,7 @@ def main():
                 df_nf = df_nf[df_nf['Numero NFS-e'].notna() & (df_nf['Numero NFS-e'] != '')]
                 df_nf = df_nf.sort_values(by='Data Emissão', ascending=False)
 
-                # Display summary metrics
+                # Display summary
                 with col2:
                     st.markdown("### Resumo da Extração")
                     col2_1, col2_2 = st.columns(2)
@@ -440,8 +397,8 @@ def main():
 
                 st.session_state['df_nf'] = df_nf
                 
-                    # Obtendo a data e hora atual com milissegundos
-                randon = datetime.now().strftime("%d%m%Y%H%M%S") + str(datetime.now().microsecond)[:3]              
+                # Generate unique filename with timestamp
+                randon = datetime.now().strftime("%d%m%Y%H%M%S") + str(datetime.now().microsecond)[:3]
                 excel_file = to_excel(df_nf)
                 st.download_button(
                     label="📥 Baixar Excel",
@@ -454,19 +411,19 @@ def main():
         if 'df_nf' in st.session_state:
             df_nf = st.session_state['df_nf']
             
-            # Filters in columns
+            # Filters
             col1, col2, col3 = st.columns(3)
             with col1:
                 if not df_nf.empty and 'Razao Social Prestador' in df_nf.columns:
                     prestador_filter = st.multiselect(
-                        ' 🧑‍🔧 Filtrar por Prestador',
+                        '🧑‍🔧 Filtrar por Prestador',
                         options=sorted(df_nf['Razao Social Prestador'].unique())
                     )
             
             with col2:
                 if not df_nf.empty:
                     date_range = st.date_input(
-                        ' 📅 Filtrar por Período',
+                        '📅 Filtrar por Período',
                         value=(df_nf['Data Emissão'].min().date(), 
                               df_nf['Data Emissão'].max().date())
                     )
@@ -481,7 +438,7 @@ def main():
                     (df_filtered['Data Emissão'].dt.date <= date_range[1])
                 ]
             
-            # Show summary metrics first
+            # Show summary metrics
             if not df_filtered.empty:
                 st.markdown("### Métricas")
                 met_col1, met_col2, met_col3 = st.columns(3)
@@ -496,14 +453,13 @@ def main():
                         total_liquido = df_filtered['Valor Liquido'].apply(convert_brazilian_number).sum()
                         st.metric("Valor Líquido Total", f"R$ {total_liquido:,.2f}")
             
-            # Display filtered data below metrics
+            # Display filtered data
             st.markdown("### Dados Detalhados")
             st.dataframe(
                 df_filtered,
                 use_container_width=True,
                 height=400
             )
-            
         else:
             st.info("Faça o upload dos arquivos na aba 'Upload e Extração' para visualizar os dados.")
 
@@ -549,8 +505,8 @@ def main():
         #### Suporte
         Em caso de dúvidas ou problemas, entre em contato com o suporte técnico.
         """)
-        
-    # Rodapé
+    
+    # Footer
     st.markdown("---")
     st.markdown(
         """
@@ -560,6 +516,6 @@ def main():
         """,
         unsafe_allow_html=True
     )
-    
+
 if __name__ == "__main__":
     main()
