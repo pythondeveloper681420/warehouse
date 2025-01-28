@@ -3,6 +3,7 @@
 #python -m venv .venv
 #.venv\Scripts\activate.bat
 #streamlit run app.py
+# limpar terminal Ctrl + L
 import streamlit as st
 import pymongo
 import urllib.parse
