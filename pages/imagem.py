@@ -5,160 +5,129 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 import io
 import urllib.parse
+import time
 import random
-
 class RapidBingImageScraper:
-    def __init__(self, max_workers=10):
-        """
-        Inicializa o scraper com configurações de paralelismo
-        
-        Args:
-            max_workers (int): Número máximo de threads simultâneas
-        """
+    def __init__(self, max_workers=10, max_retries=3):
         self.max_workers = max_workers
+        self.max_retries = max_retries
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         }
-
-    def _buscar_imagens_bing_rapido(self, query, num_imagens=3):
-        """
-        Busca imagens no Bing de forma otimizada
-        
-        Args:
-            query (str): Termo de busca
-            num_imagens (int): Número de imagens a buscar
-        
-        Returns:
-            list: Lista de URLs de imagens
-        """
+    def _enhance_query_for_image(self, query):
+        if pd.isna(query) or not str(query).strip():
+            return "imagem"
+        base_query = str(query).strip()
+        search_variations = [
+            f"{base_query} imagem",
+            f"imagem de {base_query}",
+            f"foto de {base_query}",
+            base_query
+        ]
+        return search_variations
+    def _validate_image_url(self, url):
         try:
-            # Codificar query para URL
-            query_encoded = urllib.parse.quote(query)
-            url = f"https://www.bing.com/images/search?q={query_encoded}"
-            
-            # Requisição única
-            response = requests.get(url, headers=self.headers, timeout=5)
-            
-            # Parsing rápido
-            soup = BeautifulSoup(response.text, 'lxml')
-            
-            # Encontrar imagens de forma mais eficiente
-            imagens = soup.select('img.mimg')
-            
-            # Extrair URLs rapidamente
-            urls_imagens = []
-            for img in imagens[:num_imagens]:
-                src = img.get('src') or img.get('data-src', '')
-                if src and (src.startswith('http') or src.startswith('/th?')):
-                    urls_imagens.append(f"https://www.bing.com{src}" if src.startswith('/th?') else src)
-            
-            return urls_imagens
-        
+            response = requests.head(url, timeout=5)
+            content_type = response.headers.get('content-type', '')
+            return 'image' in content_type.lower()
+        except:
+            return False
+    def _buscar_imagens_bing_rapido(self, query, num_imagens=3, retry_count=0):
+        try:
+            query_variations = self._enhance_query_for_image(query)
+            all_urls = []
+            for variation in query_variations:
+                if len(all_urls) >= num_imagens:
+                    break
+                query_encoded = urllib.parse.quote(variation)
+                url = f"https://www.bing.com/images/search?q={query_encoded}&qft=+filterui:photo-photo"
+                response = requests.get(url, headers=self.headers, timeout=10)
+                soup = BeautifulSoup(response.text, 'lxml')
+                imagens = soup.select('img.mimg')
+                for img in imagens:
+                    src = img.get('src') or img.get('data-src', '')
+                    if src and (src.startswith('http') or src.startswith('/th?')):
+                        img_url = f"https://www.bing.com{src}" if src.startswith('/th?') else src
+                        if img_url not in all_urls and self._validate_image_url(img_url):
+                            all_urls.append(img_url)
+                    if len(all_urls) >= num_imagens:
+                        break
+                time.sleep(random.uniform(0.5, 1))
+            if not all_urls and retry_count < self.max_retries:
+                time.sleep(random.uniform(1, 2))
+                return self._buscar_imagens_bing_rapido(query, num_imagens, retry_count + 1)
+            return all_urls if all_urls else self._buscar_imagens_alternativas(num_imagens)
         except Exception as e:
             st.warning(f"Erro na busca de '{query}': {e}")
-            return []
-
+            if retry_count < self.max_retries:
+                time.sleep(random.uniform(1, 2))
+                return self._buscar_imagens_bing_rapido(query, num_imagens, retry_count + 1)
+            return self._buscar_imagens_alternativas(num_imagens)
+    def _buscar_imagens_alternativas(self, num_imagens):
+        fallback_queries = [
+            "imagem exemplo",
+            "imagem genérica",
+            "imagem padrão"
+        ]
+        for query in fallback_queries:
+            try:
+                urls = self._buscar_imagens_bing_rapido(query, num_imagens, self.max_retries)
+                if urls:
+                    return urls
+            except:
+                continue
+        return ["https://via.placeholder.com/300x300.png?text=Imagem+Não+Encontrada"] * num_imagens
     def processar_dataframe(self, df, coluna_descricao, num_imagens=3):
-        """
-        Processa o DataFrame com busca paralela de imagens
-        
-        Args:
-            df (pd.DataFrame): DataFrame de entrada
-            coluna_descricao (str): Coluna para busca
-            num_imagens (int): Número de imagens por descrição
-        
-        Returns:
-            pd.DataFrame: DataFrame com URLs de imagens
-        """
-        # Adicionar coluna de URLs se não existir
-        if 'url_imagens' not in df.columns:
-            df['url_imagens'] = ''
-        
-        # Barra de progresso
+        df_processado = df.copy()
+        df_processado['url_imagens'] = ''
         progresso = st.progress(0)
-        
-        # Processamento paralelo
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Mapear futures para linhas
             futures = {
                 executor.submit(
                     self._buscar_imagens_bing_rapido, 
-                    str(descricao).strip(), 
+                    descricao,
                     num_imagens
                 ): indice 
-                for indice, descricao in enumerate(df[coluna_descricao])
+                for indice, descricao in enumerate(df_processado[coluna_descricao])
             }
-            
-            # Processar resultados conforme completam
-            for future in as_completed(futures):
+            total = len(futures)
+            for idx, future in enumerate(as_completed(futures)):
                 indice = futures[future]
                 try:
                     urls_imagens = future.result()
-                    if urls_imagens:
-                        df.at[indice, 'url_imagens'] = '; '.join(urls_imagens)
-                    
-                    # Atualizar progresso
-                    progresso.progress((indice + 1) / len(df))
-                
+                    df_processado.at[indice, 'url_imagens'] = '; '.join(urls_imagens)
+                    progresso.progress((idx + 1) / total)
                 except Exception as e:
                     st.warning(f"Erro ao processar índice {indice}: {e}")
-        
+                    fallback_urls = self._buscar_imagens_alternativas(num_imagens)
+                    df_processado.at[indice, 'url_imagens'] = '; '.join(fallback_urls)
         progresso.empty()
-        return df
-
+        return df_processado
 def main():
     st.set_page_config(page_title="🚀 Buscador Rápido de Imagens", page_icon="🔍")
-    
     st.title("🚀 Buscador Ultrarrápido de Imagens")
-    
-    st.warning("""
-    ⚠️ Avisos:
-    - Busca paralela de imagens
-    - Alta performance
-    - Use com responsabilidade
-    """)
-    
-    # Upload do arquivo Excel
+    st.warning("""⚠️ Avisos:
+- Busca otimizada para imagens
+- Alta performance com tentativas múltiplas
+- Use com responsabilidade""")
     arquivo_excel = st.file_uploader("Escolha um arquivo Excel", type=['xlsx', 'xls'])
-    
     if arquivo_excel is not None:
-        # Configurações de performance
         num_threads = st.slider("Número de threads", 1, 20, 10)
         num_imagens = st.slider("Imagens por descrição", 1, 5, 3)
-        
-        # Inicializar scraper
-        scraper = RapidBingImageScraper(max_workers=num_threads)
-        
+        max_retries = st.slider("Máximo de tentativas por busca", 1, 5, 3)
+        scraper = RapidBingImageScraper(max_workers=num_threads, max_retries=max_retries)
         try:
-            # Ler Excel
             xls = pd.ExcelFile(arquivo_excel)
             planilha = st.selectbox("Escolha a planilha", xls.sheet_names)
             df = pd.read_excel(arquivo_excel, sheet_name=planilha)
-            
-            # Selecionar coluna
-            coluna_descricao = st.selectbox(
-                "Coluna para busca de imagens", 
-                df.columns.tolist()
-            )
-            
-            # Botão de busca
+            coluna_descricao = st.selectbox("Coluna para busca de imagens", df.columns.tolist())
             if st.button("🔍 Buscar Imagens Rapidamente"):
-                # Processar DataFrame
-                df_imagens = scraper.processar_dataframe(
-                    df, 
-                    coluna_descricao, 
-                    num_imagens
-                )
-                
-                # Exibir resultados
+                df_imagens = scraper.processar_dataframe(df, coluna_descricao, num_imagens)
                 st.dataframe(df_imagens)
-                
-                # Preparar download
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     df_imagens.to_excel(writer, index=False)
-                
                 output.seek(0)
                 st.download_button(
                     label="📥 Baixar Excel com Imagens",
@@ -166,24 +135,18 @@ def main():
                     file_name='imagens_buscadas.xlsx',
                     mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 )
-                
-                # Visualização
                 st.subheader("Pré-visualização")
                 cols = st.columns(3)
-                
-                for i, (_, linha) in enumerate(df_imagens.iterrows()):
-                    if linha['url_imagens']:
-                        urls = linha['url_imagens'].split('; ')
-                        for j, url in enumerate(urls):
-                            col = cols[(i + j) % 3]
-                            with col:
-                                try:
-                                    st.image(url, width=200)
-                                except:
-                                    st.warning("Erro ao carregar imagem")
-        
+                for i, row in df_imagens.iterrows():
+                    urls = [url for url in row['url_imagens'].split('; ') if url.strip()]
+                    for j, url in enumerate(urls):
+                        col = cols[(i + j) % 3]
+                        with col:
+                            try:
+                                st.image(url, width=200)
+                            except Exception as e:
+                                st.warning(f"Erro ao carregar imagem")
         except Exception as e:
             st.error(f"Erro: {e}")
-
 if __name__ == "__main__":
     main()
