@@ -363,7 +363,8 @@ def obter_colunas_com_tipos(nome_colecao):
     
 def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None, colunas_tipos=None):
     """
-    Carrega dados paginados com suporte a filtros e ordenação
+    Carrega dados paginados com suporte a filtros e ordenação,
+    incluindo tratamento para limite de memória do MongoDB
     """
     if colunas_tipos is None:
         colunas_tipos = obter_colunas_com_tipos(nome_colecao)
@@ -377,15 +378,25 @@ def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None,
     
     try:
         # Definir ordenação padrão para a coleção XML
-        ordenacao = {}
+        ordenacao = None
         if nome_colecao == 'xml':
             ordenacao = [("Data Emissao", -1)]  # -1 para ordem decrescente, 1 para crescente
         
         total_filtrado = colecao.count_documents(consulta)
         
-        # Aplicar ordenação na consulta
+        # Configurar opções da consulta com allowDiskUse
+        opcoes_consulta = {
+            'allowDiskUse': True  # Permite uso de disco para operações de ordenação
+        }
+        
+        # Aplicar ordenação na consulta com as novas opções
         if ordenacao:
-            cursor = colecao.find(consulta).sort(ordenacao).skip(pular).limit(tamanho_pagina)
+            try:
+                cursor = colecao.find(consulta).sort(ordenacao).skip(pular).limit(tamanho_pagina)
+                cursor.with_options(**opcoes_consulta)
+            except Exception as sort_error:
+                #st.warning(f"Não foi possível ordenar por data: {sort_error}. Mostrando resultados sem ordenação.")
+                cursor = colecao.find(consulta).skip(pular).limit(tamanho_pagina)
         else:
             cursor = colecao.find(consulta).skip(pular).limit(tamanho_pagina)
         
@@ -395,6 +406,12 @@ def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None,
             df = pd.DataFrame(documentos)
             if '_id' in df.columns:
                 df = df.drop('_id', axis=1)
+                
+            # Verificar se as colunas existem antes de tentar acessá-las
+            colunas_existentes = df.columns.tolist()
+            if not colunas_existentes:
+                st.warning("Nenhuma coluna encontrada nos documentos retornados.")
+                return pd.DataFrame(), total_filtrado
         else:
             df = pd.DataFrame()
             
