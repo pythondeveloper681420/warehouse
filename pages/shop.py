@@ -1,135 +1,128 @@
-import streamlit as st
-import pandas as pd
-import requests
-import urllib.parse
-import io
-import time
+import streamlit as st  
 
-def buscar_link_google_shopping(query):
-    """
-    Busca o primeiro link de produto no Google Shopping de forma simples.
-    """
-    try:
-        # Preparar a query
-        query_encoded = urllib.parse.quote(f"{query} comprar")
-        
-        # URL de busca do Google
-        url = f"https://www.google.com.br/search?q={query_encoded}"
-        
-        # Configurar headers para parecer um navegador
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Accept-Language": "pt-BR,pt;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-        }
-        
-        # Fazer a requisição
-        response = requests.get(url, headers=headers)
-        
-        # Encontrar links de compra
-        compra_links = []
-        
-        # Padrões de links de compra
-        padroes_compra = [
-            'submarino.com.br',
-            'americanas.com.br',
-            'magazineluiza.com.br',
-            'mercadolivre.com.br',
-            'shoptime.com.br',
-            'casasbahia.com.br',
-            'lojadomecanico.com.br'
-        ]
-        
-        # Encontrar links nos resultados
-        for padrao in padroes_compra:
-            if padrao in response.text:
-                # Encontrar o primeiro link com o padrão
-                link = [link for link in response.text.split('href="') if padrao in link]
-                if link:
-                    # Limpar o link
-                    link_limpo = link[0].split('"')[0]
-                    if link_limpo.startswith('http'):
-                        return link_limpo
-        
-        return "Link não encontrado"
-    
-    except Exception as e:
-        st.warning(f"Erro na busca de link: {e}")
-        return "Erro na busca"
+def main():  
+    st.set_page_config(  
+        page_title="Tutorial Completo",  
+        page_icon="📚",  
+        layout="wide"  
+    )  
 
-def buscar_links_para_dataframe(df, coluna_descricao):
-    """
-    Busca links de compra para cada descrição no DataFrame.
-    """
-    if 'link_compra' not in df.columns:
-        df['link_compra'] = ''
+    st.title("📖 Tutorial Completo do Sistema")  
+    st.markdown("---")  
 
-    progresso = st.progress(0)
-    for indice, descricao in enumerate(df[coluna_descricao]):
-        try:
-            descricao = str(descricao).strip()
-            if descricao:
-                link = buscar_link_google_shopping(descricao)
-                df.at[indice, 'link_compra'] = link
-            
-            # Progresso e delay para evitar bloqueios
-            progresso.progress((indice + 1) / len(df))
-            time.sleep(2)  # Delay entre buscas
-        
-        except Exception as e:
-            st.warning(f"Erro ao buscar link para '{descricao}': {e}")
-    
-    progresso.empty()
-    return df
+    with st.expander("**🏠 Página Home - Visão Geral**", expanded=True):  
+        st.markdown("""  
+        ### Funcionalidades Principais:  
+        - **Visualização de dados** de 3 coleções principais: XML, PO e NFS PDF  
+        - **Filtros avançados** com busca por texto e seleção múltipla  
+        - **Controle de colunas** visíveis com ordenação personalizada  
+        - **Exportação de dados** para Excel com filtros aplicados  
 
-def main():
-    st.title("🛒 Buscador de Links de Compra")
-    
-    st.warning("""
-    ⚠️ Avisos Importantes:
-    - Busca de links tem limitações
-    - Nem todos os produtos terão links
-    - Use com moderação
-    - Respeite termos de uso dos sites
-    """)
+        ### Como Usar:  
+        1. Selecione a aba da coleção desejada  
+        2. Use o menu de colunas para escolher quais informações exibir  
+        3. Aplique filtros específicos usando os campos de busca  
+        4. Navegue entre páginas usando os controles de paginação  
+        5. Baixe os dados usando o botão de download  
+        """)  
 
-    arquivo_excel = st.file_uploader("Escolha um arquivo Excel", type=['xlsx', 'xls'])
-    
-    if arquivo_excel is not None:
-        try:
-            # Carregar arquivo
-            xls = pd.ExcelFile(arquivo_excel)
-            planilhas = xls.sheet_names
-            planilha_selecionada = st.selectbox("Escolha a planilha", planilhas)
-            df = pd.read_excel(arquivo_excel, sheet_name=planilha_selecionada)
-            
-            st.subheader("Colunas do DataFrame")
-            st.write(df.columns.tolist())
-            
-            coluna_descricao = st.selectbox("Escolha a coluna para busca de links", df.columns.tolist())
-            
-            if st.button("Buscar Links de Compra"):
-                # Realizar busca de links
-                df_com_links = buscar_links_para_dataframe(df, coluna_descricao)
-                
-                st.subheader("DataFrame com Links")
-                st.dataframe(df_com_links)
-                
-                # Preparar download
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_com_links.to_excel(writer, index=False, sheet_name='Links')
-                output.seek(0)
-                
-                st.download_button(
-                    label="Baixar Arquivo Excel com Links",
-                    data=output.getvalue(),
-                    file_name='dataframe_com_links_compra.xlsx',
-                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                )
-        
-        except Exception as e:
-            st.error(f"Erro ao processar o arquivo: {e}")
+    with st.expander("**📤 Upload de Arquivos - Integração com MongoDB**"):  
+        st.markdown("""  
+        ### Principais Recursos:  
+        - **Upload de arquivos Excel** para o MongoDB  
+        - **Remoção inteligente** de duplicatas  
+        - **Controle de versão** automático com data de criação  
+        - Suporte para **grandes volumes de dados**  
 
-if __name__ == "__main__":
-    main()
+        ### Fluxo de Trabalho:  
+        1. Na aba **Upload de Dados**:  
+           - Selecione o arquivo Excel  
+           - Defina o nome da coleção  
+           - Verifique a prévia dos dados  
+           - Execute o upload  
+
+        2. Na aba **Limpeza de Dados**:  
+           - Selecione a coleção para limpeza  
+           - Escolha o campo chave para identificação de duplicatas  
+           - Selecione o método de limpeza (rápido ou em lotes)  
+
+        ⚠️ **Dica:** Use o método em lotes para coleções com mais de 100 mil registros  
+        """)  
+
+    with st.expander("**📑 Processamento de Pedidos de Compra (PO)**"):  
+        st.markdown("""  
+        ### Funcionalidades Chave:  
+        - **Consolidação de múltiplos arquivos** Excel  
+        - **Cálculo automático** de valores totais  
+        - **Formatação padronizada** de valores monetários  
+        - **Geração de identificadores únicos** para itens  
+
+        ### Passo a Passo:  
+        1. Selecione os arquivos de PO  
+        2. Revise as métricas de processamento  
+        3. Baixe o arquivo consolidado  
+        4. Use a visualização para análise rápida:  
+           - Filtro global por texto  
+           - Métricas de fornecedores e valores  
+           - Ordenação por datas  
+        """)  
+
+    with st.expander("**📃 Processamento de XML - Notas Fiscais**"):  
+        st.markdown("""  
+        ### Recursos Principais:  
+        - **Leitura automatizada** de arquivos XML  
+        - **Integração com dados de PO** do MongoDB  
+        - **Classificação automática** por categorias fiscais  
+        - **Georreferenciamento** de endereços  
+
+        ### Fluxo Ideal:  
+        1. Faça upload dos XMLs  
+        2. Revise os dados extraídos:  
+           - Dados do emitente/destinatário  
+           - Valores fiscais  
+           - Classificação por CFOP  
+        3. Utilize os dados complementares:  
+           - Projetos relacionados  
+           - Centros de custo  
+           - Histórico de pagamentos  
+        4. Exporte para análise detalhada  
+        """)  
+
+    with st.expander("**📝 Processamento de PDF - Notas de Serviço**"):  
+        st.markdown("""  
+        ### Destaques:  
+        - **OCR inteligente** para diferentes layouts  
+        - **Reconhecimento de padrões** fiscais  
+        - **Vinculação automática** com números de PO  
+        - **Consolidação temporal** por competência  
+
+        ### Melhores Práticas:  
+        1. Organize os PDFs por período  
+        2. Verifique a qualidade da digitalização  
+        3. Use os filtros pós-processamento:  
+           - Período fiscal  
+           - Prestadores de serviço  
+           - Valores líquidos  
+        4. Cruze dados com outras fontes  
+        """)  
+
+    st.markdown("---")  
+    st.subheader("🛠 Suporte Técnico")  
+    col1, col2 = st.columns(2)  
+    with col1:  
+        st.markdown("**Problemas Comuns:**")  
+        st.write("- Formatação inconsistente de arquivos")  
+        st.write("- Timeout em processamentos grandes")  
+        st.write("- Dados ausentes em PDFs digitalizados")  
+
+    with col2:  
+        st.markdown("**Soluções Recomendadas:**")  
+        st.write("- Padronize modelos de arquivos")  
+        st.write("- Divida processamentos grandes em lotes")  
+        st.write("- Verifique resolução de documentos escaneados")  
+
+    st.markdown("---")  
+    st.markdown("**📧 Contato:** suporte@empresa.com | 📞 (11) 99999-9999")  
+
+if __name__ == "__main__":  
+    main()  

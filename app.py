@@ -555,11 +555,20 @@ class WarehouseApp:
             </style>
         """, unsafe_allow_html=True)
         
+        # # Redireciona para a página apropriada baseado no estado de login
+        # if not st.session_state.logged_in:
+        #     self.login_page()
+        # else:
+        #     self.main_page()
+
         # Redireciona para a página apropriada baseado no estado de login
         if not st.session_state.logged_in:
             self.login_page()
         else:
-            self.main_page()
+            # Redireciona para /my_home após o login
+            current_path = st.query_params.get("page", "")
+            if current_path != "my_home":
+                st.switch_page("pages/my_home.py")
 
 def main():
     """Função principal para iniciar a aplicação"""
