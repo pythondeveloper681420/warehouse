@@ -363,9 +363,8 @@ def obter_colunas_com_tipos(nome_colecao):
     
 def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None, colunas_tipos=None):
     """
-    Modificação da função original para suportar filtros numéricos
+    Carrega dados paginados com suporte a filtros e ordenação
     """
-    # Ensure colunas_tipos is a dictionary
     if colunas_tipos is None:
         colunas_tipos = obter_colunas_com_tipos(nome_colecao)
     
@@ -377,8 +376,19 @@ def carregar_dados_paginados(nome_colecao, pagina, tamanho_pagina, filtros=None,
     pular = (pagina - 1) * tamanho_pagina
     
     try:
+        # Definir ordenação padrão para a coleção XML
+        ordenacao = {}
+        if nome_colecao == 'xml':
+            ordenacao = [("Data Emissao", -1)]  # -1 para ordem decrescente, 1 para crescente
+        
         total_filtrado = colecao.count_documents(consulta)
-        cursor = colecao.find(consulta).skip(pular).limit(tamanho_pagina)
+        
+        # Aplicar ordenação na consulta
+        if ordenacao:
+            cursor = colecao.find(consulta).sort(ordenacao).skip(pular).limit(tamanho_pagina)
+        else:
+            cursor = colecao.find(consulta).skip(pular).limit(tamanho_pagina)
+        
         documentos = [converter_documento_para_pandas(doc) for doc in cursor]
         
         if documentos:
