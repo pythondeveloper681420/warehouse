@@ -25,6 +25,9 @@ if st.button("Teste",type='primary'):
     data_formatada2 = agora.strftime("%d/%m/%Y %H:%M:%S")
     st.text(data_formatada2)
 
+    data_formatada3 = agora.strftime("%d/%m/%Y")
+    st.text(data_formatada3)
+
     dia = agora.day
     mes = agora.month
     mes_texto = agora.strftime("%B")  # Mês como texto completo
